@@ -1,0 +1,114 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Server Dependencies",
+      "type": "shell",
+      "command": "npm install",
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/BankGame/server"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Install Client Dependencies",
+      "type": "shell",
+      "command": "npm install",
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/BankGame/client"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Install All Dependencies",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Install Server Dependencies", "Install Client Dependencies"],
+      "group": "build"
+    },
+    {
+      "label": "Start Server",
+      "type": "shell",
+      "command": "npm start",
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/BankGame/server"
+      },
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false
+      },
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^Server running on port (\\d+)$",
+          "file": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Server running.*$",
+          "endsPattern": "^.*Server running on port.*$"
+        }
+      }
+    },
+    {
+      "label": "Start Client",
+      "type": "shell",
+      "command": "npm run dev",
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/BankGame/client"
+      },
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false
+      },
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "Local:\\s+(https?://\\S+)",
+          "file": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*VITE.*ready.*$",
+          "endsPattern": "^.*Local:.*$"
+        }
+      }
+    },
+    {
+      "label": "Start Bank Game (Full Stack)",
+      "dependsOrder": "parallel",
+      "dependsOn": ["Start Server", "Start Client"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    }
+  ]
+}
