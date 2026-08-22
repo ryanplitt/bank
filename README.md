@@ -1,125 +1,122 @@
-# Bank Dice Game
+# Bank
 
-A multiplayer implementation of the classic "Bank" dice game with real-time gameplay using WebSockets.
+A real-time multiplayer **Bank** dice game — the push-your-luck party game where one
+person hosts the room *and plays too*, and everyone else joins from their own phone.
 
-## What is Bank?
+**Bank** is played with **2 dice** and a **shared pot**. Everyone in the round is in
+play at the same time: the server rolls on a countdown, and each player individually
+decides when to "bank out" and take the current pot. Roll past the safe opening rolls
+and hit a 7 and the pot is wiped for everyone still in. So when do you bank?
 
-Bank is a dice game where players take turns rolling dice to accumulate points, with the goal of being the first to reach 10,000 points. Players must balance risk and reward - they can keep rolling to increase their score, but if they roll without scoring any points, they "bust" and lose all points accumulated in that turn.
+## The rules
 
-### Scoring Rules
+- **2 dice** are rolled automatically on a countdown (default 8s).
+- The first `3` rolls of a round are **safe**:
+  - a **7** pays a `70` bonus into the pot,
+  - **doubles** add their face sum,
+  - anything else adds its face sum.
+- From the 4th roll on, the pressure is on:
+  - a **7 ends the round and wipes the pot** for everyone still in,
+  - **doubles double the pot**,
+  - anything else adds its face sum.
+- **Banking** takes the current pot *in full* into your permanent score and puts you
+  out for the round. Everyone who banks gets the full pot — banking doesn't reduce it.
+- The round ends when a 7 lands or everyone has banked.
+- Highest total after **15 rounds** wins; ties share the win.
 
-- **Individual 1s**: 100 points each
-- **Individual 5s**: 50 points each  
-- **Three 1s**: 1,000 points
-- **Three 2s**: 200 points
-- **Three 3s**: 300 points
-- **Three 4s**: 400 points
-- **Three 5s**: 500 points
-- **Three 6s**: 600 points
-- **Four or more of a kind**: Additional sets of three count separately
+All defaults (rounds, safe-rolls, bonus, roll interval, doubles behaviour) are
+adjustable by the host at creation.
 
-### How to Play
+## Playing
 
-1. Players take turns rolling 6 dice
-2. On each roll, you must score at least some points or you "bust"
-3. After a successful roll, you can:
-   - **Roll Again**: Risk your current turn points for a chance at more
-   - **Bank Score**: Keep your current turn points safe and end your turn
-   - **End Turn**: End your turn without banking (lose current turn points)
-4. Each player has 30 seconds per turn
-5. First player to bank 10,000+ points wins!
+1. The **host** opens the app, enters their name, and taps **Host a new room**. They get
+   a 6-letter room code and a shareable link.
+2. Everyone else opens the app on their phone, enters their name and the code
+   (or taps the share link).
+3. The host taps **Start game** once the table is full (2–12 players).
+4. Dice roll automatically. **Tap BANK** when the pot looks good to you. The host
+   leads the game but plays just like everyone else — they can also set rules, kick or
+   rename players, adjust a score, force a roll/advance, or end the game.
 
-## Getting Started
+A phone that locks its screen or a browser refresh doesn't lose anything: players are
+kept on the roster (shown greyed-out) with their score intact, and rejoin with a stored
+session token. The host role is preserved across a quick refresh, and transfers to the
+next player if the host is gone too long.
 
-### Prerequisites
+## Getting started (development)
 
-- Node.js (v14 or higher)
-- npm
+Requires Node 22.
 
-### Installation & Running
+```bash
+npm install
+npm run dev
+```
 
-1. **Install dependencies** (VS Code):
-   - Open the Command Palette (`Cmd+Shift+P` on macOS)
-   - Run: `Tasks: Run Task` → `Install All Dependencies`
+That runs both the API server and the Vite client together from the repo root. The
+client is served at `http://localhost:5173` and proxies `/socket.io` to the API, so
+everything talks to one origin. To play with friends locally, they open the same URL
+from their phones on your wifi.
 
-2. **Start the game** (VS Code):
-   - Run: `Tasks: Run Task` → `Start Bank Game (Full Stack)`
-   - Or press `Cmd+Shift+P` → `Tasks: Run Build Task`
+Other scripts:
 
-3. **Manual setup**:
-   ```bash
-   # Install server dependencies
-   cd BankGame/server
-   npm install
-   
-   # Install client dependencies  
-   cd ../client
-   npm install
-   
-   # Start server (in one terminal)
-   cd ../server
-   npm start
-   
-   # Start client (in another terminal)
-   cd ../client
-   npm run dev
-   ```
+- `npm test` — Vitest unit + integration tests (engine rules, fuzzing, the room/identity
+  layer, and malformed-input hardening).
+- `npm run e2e` — Playwright smoke tests driving three real browsers through a full game.
+- `npm run lint` / `npm run format` — ESLint + Prettier.
+- `npm run build && npm start` — build the client and run the server that serves it.
 
-4. **Play the game**:
-   - Server runs on: http://localhost:3000
-   - Client runs on: http://localhost:5173
-   - Open the client URL in multiple browser tabs/windows to play with friends
+## Deploying
 
-### Game Features
+The server serves the built client *and* the WebSocket from a single port, so there is
+exactly one container to run.
 
-- **Real-time multiplayer**: Join games with unique room codes
-- **Turn-based gameplay**: Automatic turn management with 30-second timer
-- **Live scoring**: Real-time score updates and dice rolls
-- **Bust detection**: Automatic handling of failed rolls
-- **Game state persistence**: Players can rejoin if disconnected
-- **Host controls**: Host can start games when ready
+```bash
+docker build -t bank .
+docker run --rm -p 8080:8080 -e PORT=8080 bank
+```
 
-### VS Code Integration
+`fly.toml` is included (Render/Railway consume the same Dockerfile).
 
-The project includes:
-- **Launch configuration**: Debug the server directly from VS Code
-- **Task automation**: Build and run tasks for easy development
-- **Integrated terminals**: Separate terminals for client and server
+> **Scale to exactly one instance.** All game state is in-memory and Socket.IO needs
+> session affinity, so this must run as a **single** instance. `fly.toml` sets
+> `min_machines_running = 1` and you should not scale out. Going multi-instance later
+> requires the Socket.IO Redis adapter plus externalized room state — deliberately out
+> of scope.
 
-Press `F5` to start debugging the server, or use the task runner for full-stack development.
+### Configuration
 
-## Project Structure
+| Env var | Default | Purpose |
+|---|---|---|
+| `PORT` | `3000` | HTTP + WebSocket port |
+| `NODE_ENV` | (unset) | `production` tightens some behaviour |
+| `SESSION_SECRET` | random per boot | Key for durable player tokens |
+
+## How it's built
+
+- **`BankGame/server/game/bank.js`** — the pure, exhaustively-tested rules engine. It has
+  no sockets, no timers, and no randomness (dice are passed in), so the scoring bugs of
+  the old prototype can't recur.
+- **`BankGame/server/rooms/Room.js`** — the live state of one room: roster, durable host,
+  auto-roll clock, and broadcasting, wrapped around the engine.
+- **`BankGame/server/socket/handlers.js`** — a thin validate → authorize → delegate layer.
+  Every host command re-checks server-side that the caller is actually the host.
+- **`BankGame/client/src/state/useGame.js`** — the single socket subscription feeding a
+  single versioned state snapshot, so the client can never disagree with itself.
+- **`BankGame/shared/`** — socket event names and the rule schema, shared by both sides.
+
+## Project layout
 
 ```
-bank/
 ├── BankGame/
-│   ├── client/           # React frontend with Vite
-│   │   ├── src/
-│   │   │   ├── components/
-│   │   │   │   ├── JoinForm.jsx
-│   │   │   │   └── Lobby.jsx
-│   │   │   ├── App.jsx
-│   │   │   ├── main.jsx
-│   │   │   └── socket.js
-│   │   ├── package.json
-│   │   └── vite.config.js
-│   └── server/           # Node.js backend with Socket.IO
-│       ├── game/
-│       │   └── GameState.js
-│       ├── utils/
-│       │   └── generateGameCode.js
-│       ├── index.js
-│       └── package.json
-└── .vscode/
-    ├── launch.json       # Debug configuration
-    └── tasks.json        # Build automation
+│   ├── client/       React + Vite (mobile-first)
+│   ├── server/       Express + Socket.IO, the engine, rooms, handlers
+│   └── shared/       Event-name and rule constants used by both
+├── e2e/              Playwright end-to-end specs
+├── .github/          CI workflow (lint + test + build + docker build)
+├── Dockerfile        Multi-stage: build client → serve from server
+└── fly.toml          Fly.io single-instance config
 ```
 
-## Development
+## License
 
-- **Backend**: Node.js + Express + Socket.IO
-- **Frontend**: React + Vite + Socket.IO Client  
-- **Real-time Communication**: WebSockets via Socket.IO
-- **Game Logic**: Custom Bank dice game implementation
-
-Enjoy playing Bank! 🎲
+MIT

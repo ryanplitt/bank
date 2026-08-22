@@ -1,0 +1,556 @@
+/* Bank — mobile-first stylesheet. Designed for phones passed around a table,
+   so targets are large and touch-friendly. */
+
+:root {
+  --bg: #10141c;
+  --panel: #1a2030;
+  --panel-2: #222a3d;
+  --text: #eef1f7;
+  --muted: #8b93a7;
+  --accent: #f4c542;
+  --good: #2ecc71;
+  --danger: #e74c3c;
+  --line: #2c3450;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px calc(16px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom));
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 1.3rem;
+}
+h3 {
+  font-size: 0.95rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 10px 0;
+}
+
+label input,
+label select {
+  margin-top: 6px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 10px;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* ---------------- banners ---------------- */
+
+.conn-banner,
+.err-banner {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.conn-banner {
+  background: #2a3245;
+  color: var(--muted);
+}
+
+.err-banner {
+  background: #4a1f22;
+  color: #ffb3ad;
+}
+
+/* ---------------- join ---------------- */
+
+.join {
+  text-align: center;
+  padding-top: 6vh;
+}
+
+.logo {
+  font-size: 4rem;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.tagline {
+  color: var(--muted);
+  margin-bottom: 28px;
+}
+
+.join-form {
+  text-align: left;
+}
+
+.join-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.big-action,
+.secondary,
+.bank-button,
+.host-panel summary {
+  width: 100%;
+  padding: 16px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.big-action {
+  background: var(--accent);
+  color: #1a1a1a;
+}
+
+.secondary {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.pending {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 12px;
+}
+
+.resume-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: left;
+}
+
+.resume-card .big-action {
+  margin-top: 14px;
+}
+
+.linklike {
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+  padding: 0;
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+.credit {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 28px;
+  line-height: 1.5;
+}
+
+/* ---------------- lobby ---------------- */
+
+.lobby-head h2 {
+  margin-bottom: 2px;
+}
+
+.share-field {
+  background: var(--panel-2);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  word-break: break-all;
+  margin: 8px 0 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin: 14px 0;
+}
+
+.rules-summary {
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.lobby-actions {
+  margin-top: 18px;
+}
+
+.waiting {
+  color: var(--muted);
+  text-align: center;
+  margin: 0;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* ---------------- scoreboard ---------------- */
+
+.row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 8px;
+}
+
+.row.you {
+  background: rgba(244, 197, 66, 0.12);
+}
+
+.rank {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.7rem;
+  vertical-align: middle;
+}
+
+.badge.host {
+  font-size: 0.8rem;
+}
+
+.badge.you-badge {
+  background: var(--accent);
+  color: #1a1a1a;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+.badge.away {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.state {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.score {
+  font-weight: 800;
+  font-size: 1.1rem;
+  text-align: right;
+}
+
+/* ---------------- board ---------------- */
+
+.board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.round {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.paused-chip {
+  background: var(--panel-2);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.pot {
+  text-align: center;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 16px;
+  margin: 16px 0;
+}
+
+.pot-label {
+  color: var(--muted);
+  letter-spacing: 0.2em;
+  font-size: 0.8rem;
+}
+
+.pot-value {
+  font-size: 3.5rem;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1.1;
+}
+
+.dice-row {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  padding: 10px 0 4px;
+}
+
+.die {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  font-weight: 900;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 14px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+}
+
+.die.doubles {
+  box-shadow: 0 0 0 3px var(--accent), 0 4px 0 rgba(0, 0, 0, 0.4);
+}
+
+.dice-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 22px;
+}
+
+.roll-note {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 8px 0;
+}
+
+/* ---------------- countdown ---------------- */
+
+.countdown {
+  margin: 14px 0 4px;
+}
+
+.countdown-track {
+  height: 8px;
+  background: var(--panel-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.countdown-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.1s linear;
+}
+
+.countdown-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.countdown-label.urgent {
+  color: var(--danger);
+}
+
+/* ---------------- bank button ---------------- */
+
+.bank-button {
+  display: block;
+  width: 100%;
+  padding: 22px 16px;
+  margin: 14px 0;
+  background: linear-gradient(180deg, #35e08a, #1fbf6d);
+  color: #052012;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35);
+  touch-action: manipulation;
+}
+
+.bank-button.muted {
+  background: var(--panel-2);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.bank-main {
+  font-size: 1.7rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.bank-sub {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+/* ---------------- host panel ---------------- */
+
+.host-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin: 14px 0;
+  overflow: hidden;
+}
+
+.host-panel summary {
+  background: var(--panel-2);
+  font-weight: 700;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.host-body {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.host-body fieldset {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px 12px;
+  margin: 0;
+}
+
+.host-body legend {
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 0 4px;
+}
+
+.host-actions,
+.player-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.host-actions button,
+.player-actions button {
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 12px;
+  border: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.player-controls {
+  display: grid;
+  gap: 8px;
+}
+
+/* ---------------- feed ---------------- */
+
+.feed {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.feed-empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.feed-line {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.feed-line:last-child {
+  border-bottom: none;
+}
+
+/* ---------------- game over ---------------- */
+
+.gameover {
+  text-align: center;
+}
+
+.winner-line {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.gameover .panel {
+  text-align: left;
+}

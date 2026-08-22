@@ -1,230 +1,94 @@
+/**
+ * Bank server entry point.
+ *
+ * Single process, single port: it serves the built client (express.static with
+ * an SPA fallback) AND the Socket.IO upgrade on the same origin, so browsers
+ * never need CORS and there is exactly one thing to deploy. All game state is
+ * in-memory — this intentionally runs at exactly one instance (see docs/PLAN.md).
+ *
+ * Config comes from the environment:
+ *   PORT            (default 3000)
+ *   NODE_ENV        (production disables permissive dev extras)
+ *   SESSION_SECRET  (optional; random per boot otherwise)
+ */
+
+import { createServer } from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
 import express from 'express';
-import http from 'http';
+import helmet from 'helmet';
 import { Server } from 'socket.io';
-import cors from 'cors';
-import GameState from './game/GameState.js';
-import { generateGameCode } from './utils/generateGameCode.js';
+import { registerHandlers } from './socket/handlers.js';
+import { configureSession } from './utils/session.js';
+import { logger } from './utils/log.js';
 
-const PORT = 3000;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const PORT = Number(process.env.PORT) || 3000;
+const isProd = process.env.NODE_ENV === 'production';
+
+configureSession(process.env.SESSION_SECRET);
+
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(helmet({ contentSecurityPolicy: false })); // CSP relaxed for the SPA bundle + inline favicon
+app.disable('x-powered-by');
 
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: 'http://localhost:5173',
-  },
+// Health endpoint the orchestrator can hit without a WebSocket round trip.
+app.get('/healthz', (_req, res) => {
+  res.json({ ok: true, uptime: process.uptime() });
 });
 
-const games = {};
-
-function broadcastGameState(game, code) {
-  const gameState = {
-    players: game.getPlayers(),
-    currentPlayer: game.getCurrentPlayer()?.name,
-    round: game.round,
-    status: game.status,
-    currentTurnScore: game.currentTurnScore,
-    currentDice: game.currentDice,
-    targetScore: game.targetScore
-  };
-  io.to(code).emit('gameStateUpdate', gameState);
+// Serve the built client. In dev the Vite dev server proxies /socket.io and
+// /healthz here, so this only matters for `npm run build && npm start`.
+const clientDist = path.join(__dirname, '..', 'client', 'dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  // SPA fallback: unknown routes serve index.html so client-side paths work.
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+} else {
+  app.get('/', (_req, res) => {
+    res.type('text').send('Bank server running. Build the client (npm run build) to serve it here.');
+  });
 }
 
-function startTurnTimer(game, code) {
-  if (game.turnTimer) {
-    clearInterval(game.turnTimer);
-  }
-  
-  let timeLeft = game.turnTimeLimit;
-  io.to(code).emit('turnTimer', { timeLeft });
-  
-  game.turnTimer = setInterval(() => {
-    timeLeft -= 1;
-    io.to(code).emit('turnTimer', { timeLeft });
-    
-    if (timeLeft <= 0) {
-      clearInterval(game.turnTimer);
-      game.turnTimer = null;
-      
-      // Force end turn due to timeout
-      game.bustTurn();
-      game.nextPlayer();
-      
-      if (game.status === 'playing') {
-        broadcastGameState(game, code);
-        startTurnTimer(game, code);
-      }
-    }
-  }, 1000);
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  maxHttpBufferSize: 1e6, // 1 MB — plenty for our small payloads, a flood guard
+});
+
+registerHandlers(io);
+
+httpServer.listen(PORT, () => {
+  logger.info({ event: 'listen', port: PORT, env: isProd ? 'production' : 'development' });
+});
+
+/* -------------------------------------------------------------------- *
+ * Process hardening
+ * -------------------------------------------------------------------- */
+
+// A single bad request should never take the whole room down with it. We log
+// and keep serving; the handlers already translate throws into error events.
+process.on('uncaughtException', (err) => {
+  logger.error({ event: 'uncaught_exception', message: err.stack || String(err) });
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error({ event: 'unhandled_rejection', message: String(reason) });
+});
+
+/** Graceful shutdown: notify clients, stop accepting, then exit. */
+function shutdown(signal) {
+  logger.info({ event: 'shutdown', signal });
+  io.close();
+  httpServer.close(() => {
+    process.exit(0);
+  });
+  // Never hang forever waiting on sockets.
+  setTimeout(() => process.exit(0), 3000).unref();
 }
 
-io.on('connection', (socket) => {
-  console.log(`Socket connected: ${socket.id}`);
-
-  socket.on('createGame', () => {
-    let code;
-    do {
-      code = generateGameCode();
-    } while (games[code]);
-    games[code] = new GameState();
-    socket.emit('gameCreated', code);
-    console.log(`Game created with code ${code}`);
-  });
-
-  socket.on('joinGame', ({ name, code }) => {
-    const game = games[code];
-    if (game) {
-      socket.data.name = name;
-      socket.data.code = code;
-      game.addPlayer(name, socket.id);
-      socket.join(code);
-      io.to(code).emit('playerJoined', { 
-        players: game.getPlayerNames(), 
-        code,
-        gameState: {
-          players: game.getPlayers(),
-          status: game.status,
-          round: game.round
-        }
-      });
-      console.log(`${name} joined game ${code}`);
-    } else {
-      socket.emit('joinFailed');
-      console.log(`Join failed for code ${code}`);
-    }
-  });
-
-  socket.on('startGame', () => {
-    const { code } = socket.data || {};
-    const game = games[code];
-    if (!game || !game.isHost(socket.id) || game.status !== 'waiting') {
-      return;
-    }
-
-    game.startGame();
-    broadcastGameState(game, code);
-    startTurnTimer(game, code);
-    console.log(`Game ${code} started`);
-  });
-
-  socket.on('rollDice', () => {
-    const { code } = socket.data || {};
-    const game = games[code];
-    
-    if (!game || !game.isCurrentPlayer(socket.id) || game.status !== 'playing') {
-      return;
-    }
-
-    const dice = game.rollDice();
-    const score = game.calculateScore(dice);
-    
-    if (score === 0) {
-      // Bust! Player loses all points for this turn
-      game.bustTurn();
-      game.nextPlayer();
-      
-      io.to(code).emit('bust', { 
-        player: socket.data.name,
-        dice: dice
-      });
-      
-      if (game.status === 'playing') {
-        broadcastGameState(game, code);
-        startTurnTimer(game, code);
-      }
-    } else {
-      // Add score to current turn
-      game.currentTurnScore += score;
-      game.getCurrentPlayer().score += score;
-      
-      io.to(code).emit('diceRolled', {
-        player: socket.data.name,
-        dice: dice,
-        score: score,
-        turnScore: game.currentTurnScore
-      });
-      
-      broadcastGameState(game, code);
-    }
-  });
-
-  socket.on('bankScore', () => {
-    const { code } = socket.data || {};
-    const game = games[code];
-    
-    if (!game || !game.isCurrentPlayer(socket.id) || game.status !== 'playing') {
-      return;
-    }
-
-    const gameOver = game.bankScore();
-    
-    if (gameOver) {
-      const winner = game.checkWinner();
-      game.clearTimers();
-      io.to(code).emit('gameOver', { winner: winner.name });
-    } else {
-      io.to(code).emit('scoreBanked', {
-        player: socket.data.name,
-        bankedScore: game.getCurrentPlayer().bankedScore
-      });
-      
-      game.nextPlayer();
-      broadcastGameState(game, code);
-      startTurnTimer(game, code);
-    }
-  });
-
-  socket.on('endTurn', () => {
-    const { code } = socket.data || {};
-    const game = games[code];
-    
-    if (!game || !game.isCurrentPlayer(socket.id) || game.status !== 'playing') {
-      return;
-    }
-
-    game.nextPlayer();
-    broadcastGameState(game, code);
-    startTurnTimer(game, code);
-  });
-
-  socket.on('disconnect', () => {
-    const { code, name } = socket.data || {};
-    if (code && games[code]) {
-      const game = games[code];
-      game.removePlayer(socket.id);
-      game.clearTimers();
-      
-      io.to(code).emit('playerJoined', { 
-        players: game.getPlayerNames(), 
-        code,
-        gameState: {
-          players: game.getPlayers(),
-          status: game.status,
-          round: game.round
-        }
-      });
-      
-      console.log(`${name} left game ${code}`);
-      
-      if (game.getPlayerNames().length === 0) {
-        delete games[code];
-      } else if (game.status === 'playing') {
-        // If current player left, move to next player
-        broadcastGameState(game, code);
-        if (game.players.length > 0) {
-          startTurnTimer(game, code);
-        }
-      }
-    }
-    console.log(`Socket disconnected: ${socket.id}`);
-  });
-});
-
-app.get('/', (req, res) => {
-  res.send('BankGame Server');
-});
-
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

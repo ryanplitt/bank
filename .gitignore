@@ -206,3 +206,8 @@ config.local.json
 
 # Local development
 .local
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

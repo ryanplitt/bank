@@ -54,4 +54,11 @@ export default [
     files: ['**/*.test.js', '**/*.test.jsx'],
     languageOptions: { globals: { ...globals.node } },
   },
+
+  // Playwright E2E: the runner is Node, but spec callbacks (locator,
+  // waitForFunction) reference browser globals like `document`.
+  {
+    files: ['e2e/**/*.spec.js'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
 ];

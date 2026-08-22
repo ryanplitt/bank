@@ -1,0 +1,5 @@
+[permissions]
+allow = ["Bash=cd /Users/ryanplitt/Desktop/bank && npm install 2>&1 | tail -5", "Bash=cd /Users/ryanplitt/Desktop/bank && npm test 2>&1 | tail -40"]
+
+[sandbox]
+allow_write = ["${HOME}/.docker"]
