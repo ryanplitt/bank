@@ -2,24 +2,17 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch Bank Game Server",
+      "name": "Debug Bank Server",
       "type": "node",
       "request": "launch",
       "program": "${workspaceFolder}/BankGame/server/index.js",
       "cwd": "${workspaceFolder}/BankGame/server",
       "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
       "env": {
-        "NODE_ENV": "development"
-      },
-      "runtimeArgs": ["--experimental-modules"]
-    }
-  ],
-  "compounds": [
-    {
-      "name": "Launch Bank Game (Full Stack)",
-      "configurations": ["Launch Bank Game Server"],
-      "preLaunchTask": "Install Dependencies",
-      "stopAll": true
+        "NODE_ENV": "development",
+        "PORT": "3000"
+      }
     }
   ]
 }
