@@ -77,11 +77,31 @@ docker run --rm -p 8080:8080 -e PORT=8080 bank
 
 `fly.toml` is included (Render/Railway consume the same Dockerfile).
 
-> **Scale to exactly one instance.** All game state is in-memory and Socket.IO needs
-> session affinity, so this must run as a **single** instance. `fly.toml` sets
-> `min_machines_running = 1` and you should not scale out. Going multi-instance later
-> requires the Socket.IO Redis adapter plus externalized room state — deliberately out
-> of scope.
+> **Scale to exactly one machine.** All game state is in-memory and Socket.IO needs
+> session affinity, so Bank **must** run on a single Fly machine. If more than one
+> machine ever serves traffic, the host's socket lands on one and a joiner's on another,
+> so the joiner sees **"no game with that code"** — the rooms simply don't exist on the
+> machine they connected to. That is exactly what happens if Fly ever runs two machines.
+
+```bash
+# Deploy with HA disabled so Fly does NOT spin up a redundant standby machine.
+# This is the critical flag: on first deploy (and after fly scale count 0),
+# Fly's default is to create TWO machines, which fragments in-memory rooms.
+npm run deploy            # == fly deploy --ha=false
+# After any deploy, double-check the count is exactly one:
+fly scale count 1 -a bank-yxkpxq --yes
+fly scale show -a bank-yxkpxq     # COUNT must be 1
+```
+
+Fixing a live split (host can "host" but nobody can join): destroy the extra machine.
+
+```bash
+fly machines list -a bank-yxkpxq                # find the machines
+fly scale count 1 -a bank-yxkpxq --yes          # kill the redundant one
+```
+
+If Bank ever needs horizontal scale, it requires the Socket.IO Redis adapter plus
+externalized room state — deliberately out of scope.
 
 ### Configuration
 

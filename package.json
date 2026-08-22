@@ -19,6 +19,7 @@
     "dev:client": "npm run dev --workspace @bank/client",
     "build": "npm run build --workspace @bank/client",
     "start": "npm run start --workspace @bank/server",
+    "deploy": "fly deploy --ha=false",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "npm run build && playwright test",

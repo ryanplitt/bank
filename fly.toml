@@ -1,25 +1,40 @@
 # fly.toml app configuration file generated for bank-yxkpxq on 2026-08-22T19:56:59Z
 #
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+# IMPORTANT: Bank keeps all game state in memory and Socket.IO needs session
+# affinity, so this MUST run at EXACTLY ONE machine. Multiple machines fragment
+# rooms between replicas — the host's socket lands on one machine and a joiner's
+# on another, so the joiner gets "no game with that code". A single machine is
+# the only way the app is correct.
 #
+# The config below keeps one machine running (min_machines_running = 1, never
+# auto-stop), but it CANNOT by itself stop Fly's first-deploy HA behavior from
+# creating a redundant second machine — `fly deploy --ha=false` is what prevents
+# that. See `npm run deploy` and the README "Deploying" note.
 
-app = 'bank-yxkpxq'
-primary_region = 'ord'
+app = "bank-yxkpxq"
+
+# Which region the single machine lives in. Without this, Fly must pick on every
+# deploy, which invites machine churn. `ord` matches the machine Fly already
+# placed for this app — change it to whatever region you use.
+primary_region = "ord"
 
 [build]
 
 [env]
-  PORT = '8080'
+  PORT = "8080"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = 'off'
+  # NEVER auto-stop/suspend: a stopped machine discards all in-memory rooms.
+  auto_stop_machines = false
   auto_start_machines = true
+  # Keep at least one machine running; this alone does NOT cap the count at 1.
+  # The cap comes from `fly scale count 1` + `fly deploy --ha=false`.
   min_machines_running = 1
 
 [[vm]]
-  memory = '256mb'
-  cpu_kind = 'shared'
+  memory = "256mb"
+  cpu_kind = "shared"
   cpus = 1
   memory_mb = 256
