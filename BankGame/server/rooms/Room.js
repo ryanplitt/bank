@@ -340,7 +340,7 @@ export class Room {
   }
 
   /** Move from a finished round to the next, or on to the game result. */
-  advanceRound() {
+  startRound() {
     if (this.state.phase !== PHASE.ROUND_OVER) {
       return { ok: false, reason: 'round is still live' };
     }
@@ -486,11 +486,13 @@ export class Room {
       rules: this.state.rules,
       pot: this.state.pot,
       lastRoll: this.state.lastRoll,
+      lastRoundResult: this.state.lastRoundResult,
       winnerIds: this.state.winnerIds,
       players,
       nextRollAt: this.nextRollAt,
       paused: this.paused,
       canStart: this.canStart(),
+      canStartRound: this.state.phase === PHASE.ROUND_OVER,
     };
   }
 

@@ -4,51 +4,62 @@ import Scoreboard from './Scoreboard.jsx';
 import RollFeed from './RollFeed.jsx';
 import HostPanel from './HostPanel.jsx';
 import GameOver from './GameOver.jsx';
+import RoundOver from './RoundOver.jsx';
+import RoundProgress from './RoundProgress.jsx';
+import DiceTray from './DiceTray.jsx';
+import Pot from './Pot.jsx';
 
 /**
- * The main in-game view: pot, dice, countdown, scoreboard, feed, and the BANK
- * button. The host's extra controls sit behind a disclosure so their playing
- * view stays clean too.
+ * The main in-game view. Every player sees a compact header with round progress,
+ * the pot, animated dice and a BANK button. The host additionally gets a full
+ * dashboard and the "start next round" action. On desktop (the host's shared
+ * screen, or anyone) the same view lays out into a roomier dashboard grid.
  */
 export default function GameBoard({ state, me, isHost, canBank, feed, bank, host }) {
-  const { round, rules, pot, lastRoll, nextRollAt, players } = state;
+  const { round, rules, pot, lastRoll, nextRollAt, players, phase } = state;
+  const roundOver = phase === 'roundOver';
 
-  if (state.phase === 'gameOver') {
+  if (phase === 'gameOver') {
     return <GameOver state={state} me={me} isHost={isHost} host={host} />;
   }
 
   return (
     <div className="board">
       <header className="board-head">
-        <div className="round">Round {round} / {rules.rounds}</div>
+        <RoundProgress round={round} total={rules.rounds} phase={phase} />
         {state.paused && <div className="paused-chip">⏸ paused</div>}
       </header>
 
-      <div className="pot">
-        <div className="pot-label">POT</div>
-        <div className="pot-value">{pot}</div>
-      </div>
+      {roundOver ? (
+        <RoundOver state={state} isHost={isHost} host={host} />
+      ) : (
+        <div className="board-main">
+          <div className="dice-zone">
+            <Pot value={pot} />
+            <DiceTray lastRoll={lastRoll} />
+            {lastRoll && <div className="roll-note">{rollNote(lastRoll)}</div>}
+          </div>
 
-      <div className="dice-row">
-        {lastRoll ? (
-          lastRoll.dice.map((d, i) => <DiceFace key={i} value={d} big={lastRoll.isDoubles} />)
-        ) : (
-          <div className="dice-empty">The dice are waiting…</div>
-        )}
-      </div>
-      {lastRoll && <div className="roll-note">{rollNote(lastRoll)}</div>}
+          {phase === 'playing' && (
+            <Countdown nextRollAt={nextRollAt} totalMs={rules.rollIntervalSeconds * 1000} />
+          )}
 
-      {state.phase === 'playing' && (
-        <Countdown nextRollAt={nextRollAt} totalMs={rules.rollIntervalSeconds * 1000} />
+          <BankButton canBank={canBank} pot={pot} onClick={bank} />
+        </div>
       )}
 
-      <BankButton canBank={canBank} pot={pot} onClick={bank} />
-
-      {isHost && <HostPanel state={state} host={host} me={me} />}
+      {isHost && (
+        <HostPanel state={state} host={host} me={me} />
+      )}
 
       <section className="panel">
         <h3>Scores</h3>
-        <Scoreboard players={players} me={me} phase={state.phase} />
+        <Scoreboard
+          players={players}
+          me={me}
+          phase={phase}
+          lastRoundResult={state.lastRoundResult}
+        />
       </section>
 
       <section className="panel">
@@ -57,10 +68,6 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
       </section>
     </div>
   );
-}
-
-function DiceFace({ value, big }) {
-  return <span className={`die ${big ? 'doubles' : ''}`}>{value}</span>;
 }
 
 function rollNote(lastRoll) {

@@ -6,95 +6,106 @@ import {
 } from '@bank/shared';
 
 /**
- * Host controls behind a disclosure so it doesn't clutter the host's own play
- * view. Rule edits are staged locally and applied on "Apply"; the server is the
- * authority both for validation and for *who* may call these (re-checked even
- * though the button only appears for the host).
+ * Host dashboard — the host's command centre behind a disclosure so the playing
+ * view stays clean on their own phone. Rule edits are staged locally and applied
+ * on "Apply"; the server is the authority both for validation and for *who* may
+ * call these (re-checked even though these controls only show for the host).
+ *
+ * The most important host action between rounds — "Start next round" — lives
+ * prominently on the RoundOver screen, not buried here.
  */
 export default function HostPanel({ state, me, host }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(() => ({ ...state.rules }));
 
   const set = (key) => (e) => setDraft((d) => ({ ...d, [key]: Number(e.target.value) }));
-
   const applyRules = () => host(C2S.UPDATE_RULES, { rules: draft });
 
   return (
     <details className="host-panel" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary>Host controls</summary>
+      <summary>🎛 Host dashboard</summary>
       <div className="host-body">
-        <fieldset disabled={state.phase !== 'lobby'}>
-          <legend>Rules (lobby only)</legend>
-          <label>
-            Rounds
-            <input
-              type="number"
-              value={draft.rounds}
-              min={RULE_LIMITS.rounds.min}
-              max={RULE_LIMITS.rounds.max}
-              onChange={set('rounds')}
-            />
-          </label>
-          <label>
-            Safe rolls
-            <input
-              type="number"
-              value={draft.safeRolls}
-              min={RULE_LIMITS.safeRolls.min}
-              max={RULE_LIMITS.safeRolls.max}
-              onChange={set('safeRolls')}
-            />
-          </label>
-          <label>
-            Seven bonus
-            <input
-              type="number"
-              value={draft.sevenBonus}
-              min={RULE_LIMITS.sevenBonus.min}
-              max={RULE_LIMITS.sevenBonus.max}
-              onChange={set('sevenBonus')}
-            />
-          </label>
-          <label>
-            Seconds per roll
-            <input
-              type="number"
-              value={draft.rollIntervalSeconds}
-              min={RULE_LIMITS.rollIntervalSeconds.min}
-              max={RULE_LIMITS.rollIntervalSeconds.max}
-              onChange={set('rollIntervalSeconds')}
-            />
-          </label>
-          <label>
-            Doubles during safe rolls
-            <select
-              value={draft.doublesDuringSafeRolls}
-              onChange={(e) => setDraft((d) => ({ ...d, doublesDuringSafeRolls: e.target.value }))}
-            >
-              {DOUBLES_MODES.map((m) => (
-                <option key={m} value={m}>
-                  {m === 'double' ? 'Double the pot' : 'Add their sum'}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" onClick={applyRules}>Apply rules</button>
-        </fieldset>
-
         <div className="host-actions">
-          <button type="button" onClick={() => host(C2S.FORCE_ROLL)}>Force roll</button>
-          <button type="button" onClick={() => host(C2S.FORCE_END_ROUND)}>Force end round</button>
-          <button type="button" onClick={() => host(C2S.END_GAME)}>End game now</button>
+          <button type="button" onClick={() => host(C2S.FORCE_ROLL)}>Roll now</button>
           <button type="button" onClick={() => host(C2S.SET_PAUSED, { paused: !state.paused })}>
-            {state.paused ? 'Resume' : 'Pause'}
+            {state.paused ? '▶ Resume' : '⏸ Pause'}
+          </button>
+          <button type="button" className="danger" onClick={() => host(C2S.END_GAME)}>
+            End game
           </button>
         </div>
+
+        <fieldset disabled={state.phase !== 'lobby'}>
+          <legend>Rules (lobby only)</legend>
+          {ruleFields(draft, set, setDraft)}
+          <button type="button" onClick={applyRules}>Apply rules</button>
+        </fieldset>
 
         {(state.players || []).length > 1 && (
           <PlayerControls players={state.players} me={me} host={host} />
         )}
       </div>
     </details>
+  );
+}
+
+function ruleFields(draft, set, setDraft) {
+  return (
+    <>
+      <label>
+        Rounds
+        <input
+          type="number"
+          value={draft.rounds}
+          min={RULE_LIMITS.rounds.min}
+          max={RULE_LIMITS.rounds.max}
+          onChange={set('rounds')}
+        />
+      </label>
+      <label>
+        Safe rolls
+        <input
+          type="number"
+          value={draft.safeRolls}
+          min={RULE_LIMITS.safeRolls.min}
+          max={RULE_LIMITS.safeRolls.max}
+          onChange={set('safeRolls')}
+        />
+      </label>
+      <label>
+        Seven bonus
+        <input
+          type="number"
+          value={draft.sevenBonus}
+          min={RULE_LIMITS.sevenBonus.min}
+          max={RULE_LIMITS.sevenBonus.max}
+          onChange={set('sevenBonus')}
+        />
+      </label>
+      <label>
+        Seconds per roll
+        <input
+          type="number"
+          value={draft.rollIntervalSeconds}
+          min={RULE_LIMITS.rollIntervalSeconds.min}
+          max={RULE_LIMITS.rollIntervalSeconds.max}
+          onChange={set('rollIntervalSeconds')}
+        />
+      </label>
+      <label>
+        Doubles during safe rolls
+        <select
+          value={draft.doublesDuringSafeRolls}
+          onChange={(e) => setDraft((d) => ({ ...d, doublesDuringSafeRolls: e.target.value }))}
+        >
+          {DOUBLES_MODES.map((m) => (
+            <option key={m} value={m}>
+              {m === 'double' ? 'Double the pot' : 'Add their sum'}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
   );
 }
 

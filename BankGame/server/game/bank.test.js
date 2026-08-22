@@ -16,7 +16,7 @@ import {
   startGame,
   startNextRound,
 } from './bank.js';
-import { createSeededRng } from '../utils/rng.js';
+import { createSeededRng, defaultRng } from '../utils/rng.js';
 import { DEFAULT_RULES } from '@bank/shared';
 
 /** A game already under way with the given players, ready for its first roll. */
@@ -228,6 +228,39 @@ describe('banking', () => {
     expect(second.events.map((e) => e.kind)).toContain('roundEnded');
   });
 
+  it('records how a round ended: all banked', () => {
+    let state = roll(playingGame(['a', 'b']), [3, 4]); // safe 7 → pot 70
+    state = bank(state, 'a').state;
+    state = bank(state, 'b').state;
+    expect(state.phase).toBe(PHASE.ROUND_OVER);
+    expect(state.lastRoundResult).toEqual({
+      reason: 'allBanked',
+      round: 1,
+      pot: 70,
+    });
+  });
+
+  it('records how a round ended: busted on a 7', () => {
+    let state = playingGame(['a', 'b']);
+    for (let i = 0; i < state.rules.safeRolls; i += 1) state = roll(state, [1, 1]);
+    state = roll(state, [3, 4]); // 7 after the safe window → bust
+    expect(state.phase).toBe(PHASE.ROUND_OVER);
+    expect(state.lastRoundResult).toEqual({
+      reason: 'busted',
+      round: 1,
+      potLost: expect.any(Number),
+    });
+  });
+
+  it('clears lastRoundResult when the next round starts', () => {
+    let state = roll(playingGame(['a', 'b']), [3, 4]);
+    state = bank(state, 'a').state;
+    state = bank(state, 'b').state;
+    const next = startNextRound(state);
+    expect(next.state.phase).toBe(PHASE.PLAYING);
+    expect(next.state.lastRoundResult).toBeNull();
+  });
+
   it('refuses to bank an empty pot', () => {
     expect(() => bank(playingGame(), 'a')).toThrow(/pot/i);
     expect(canBank(playingGame(), 'a')).toBe(false);
@@ -398,6 +431,29 @@ describe('dice', () => {
     const seen = new Set();
     for (let i = 0; i < 500; i += 1) rollDice(rng).forEach((d) => seen.add(d));
     expect([...seen].sort()).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('production dice (node:crypto randomInt) are a fair, uniform 1..6', () => {
+    // The live server rolls with defaultRng, which wraps node:crypto's
+    // randomInt() — a cryptographically-secure, uniform integer generator
+    // (unlike Math.random, which is fine for games but can be predicted).
+    // Assert the observed face distribution is statistically consistent with
+    // a fair die via a Pearson chi-square goodness-of-fit test.
+    const N = 600_000; // 100k per face — enough power to catch even a 1% bias.
+    const faces = new Array(6).fill(0);
+    for (let i = 0; i < N; i += 1) {
+      const [d1, d2] = rollDice(defaultRng);
+      faces[d1 - 1] += 1;
+      faces[d2 - 1] += 1;
+    }
+    const expected = (2 * N) / 6;
+    const chi2 = faces.reduce((sum, c) => sum + (c - expected) ** 2 / expected, 0);
+    // Critical value for df=5 at alpha=0.05 is 11.07; with this sample size any
+    // real non-uniformity (say a die weighted ≥2% toward one face) is certain to
+    // exceed it, while a fair die clears it ~95% of the time.
+    expect(chi2).toBeLessThan(11.07);
+    // And every face must have been seen.
+    expect(faces.every((c) => c > 0)).toBe(true);
   });
 });
 

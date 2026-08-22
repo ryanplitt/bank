@@ -320,6 +320,9 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .round {
@@ -335,6 +338,58 @@ button:disabled {
   font-size: 0.8rem;
 }
 
+/* ---------------- round progress ---------------- */
+
+.round-progress {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  flex: 1 1 100%;
+  margin: 8px 0 2px;
+}
+
+.round-progress-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.round-dot {
+  flex: 1 1 0;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.round-dot--done {
+  background: var(--good);
+}
+
+.round-dot--current {
+  background: var(--accent);
+  transform: scaleY(1.4);
+}
+
+.round-progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.round-progress-label strong {
+  color: var(--text);
+}
+
+.round-progress-pct {
+  color: var(--muted);
+}
+
+/* ---------------- pot ---------------- */
+
 .pot {
   text-align: center;
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
@@ -342,6 +397,30 @@ button:disabled {
   border-radius: var(--radius);
   padding: 22px 16px;
   margin: 16px 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.pot--busted {
+  border-color: var(--danger);
+  background: linear-gradient(180deg, #3a2023, var(--panel));
+}
+
+.pot-pulse {
+  animation: pot-pulse 0.5s ease;
+}
+
+@keyframes pot-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 3px rgba(244, 197, 66, 0.35);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .pot-label {
@@ -364,28 +443,102 @@ button:disabled {
   padding: 10px 0 4px;
 }
 
+.dice-tray {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  min-height: 96px;
+  padding: 6px 0;
+}
+
+/* Pip dice. The face is a 3×3 grid; the .die-pip cells are the 9 possible pip
+   positions and the .is-pip cells are the lit dots. */
 .die {
-  width: 72px;
-  height: 72px;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  background: #fff;
+  border-radius: 18px;
+  padding: 10px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.die-pip {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.2rem;
-  font-weight: 900;
-  background: #fff;
-  color: #1a1a1a;
-  border-radius: 14px;
-  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
 }
 
-.die.doubles {
-  box-shadow: 0 0 0 3px var(--accent), 0 4px 0 rgba(0, 0, 0, 0.4);
+.die-pip::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.die-pip.is-pip::after {
+  background: radial-gradient(circle at 35% 30%, #4a4a55, #1a1a1f);
+}
+
+.die--doubles {
+  box-shadow: 0 0 0 3px var(--accent), 0 6px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Roll-in animation: two dice tumble in a little, keyed so it restarts each
+   time a new authoritative roll lands. */
+.dice-anim {
+  display: flex;
+  gap: 18px;
+}
+
+.die {
+  animation: die-roll 0.55s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.die:nth-child(2) {
+  animation-delay: 0.05s;
+}
+
+@keyframes die-roll {
+  0% {
+    transform: translateY(-70px) rotate(-25deg) scale(0.7);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) rotate(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* A gentle idle wobble on doubles so they read as special. */
+.die--doubles {
+  animation-name: die-roll, doubles-pop;
+  animation-duration: 0.55s, 1.6s;
+  animation-delay: 0s, 0.55s;
+}
+
+@keyframes doubles-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
 }
 
 .dice-empty {
   color: var(--muted);
   text-align: center;
   padding: 22px;
+  font-size: 0.95rem;
 }
 
 .roll-note {
@@ -512,6 +665,12 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.host-actions button.danger {
+  background: #3a1f22;
+  border-color: var(--danger);
+  color: #ffb3ad;
+}
+
 .player-controls {
   display: grid;
   gap: 8px;
@@ -554,3 +713,135 @@ button:disabled {
 .gameover .panel {
   text-align: left;
 }
+
+/* ---------------- round over ---------------- */
+
+.round-over {
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px 16px;
+  margin: 16px 0;
+  animation: round-over-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.round-over--busted {
+  border-color: var(--danger);
+  background: linear-gradient(180deg, #3a2023, var(--panel));
+}
+
+@keyframes round-over-in {
+  0% {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.round-over-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 4px 12px;
+  margin-bottom: 10px;
+}
+
+.round-over--busted .round-over-badge {
+  color: #ffb3ad;
+  background: rgba(231, 76, 60, 0.16);
+}
+
+.round-over h2 {
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+}
+
+.round-over-detail {
+  color: var(--muted);
+  font-size: 1rem;
+  margin: 0 auto;
+  max-width: 30ch;
+  line-height: 1.5;
+}
+
+.round-over-detail strong {
+  color: var(--accent);
+}
+
+.round-over-action {
+  margin-top: 20px;
+}
+
+.round-over-hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 12px;
+}
+
+.round-over-start {
+  background: linear-gradient(180deg, #35e08a, #1fbf6d);
+  color: #052012;
+}
+
+/* ---------------- desktop / dashboard layout ----------------
+   The host usually runs on a desktop and shares their screen; give that view a
+   roomier, more "dashboard"-like two-column layout. Phones stay single-column. */
+
+@media (min-width: 760px) {
+  .app {
+    max-width: 1100px;
+    padding: 20px 28px 32px;
+  }
+
+  .board-main {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .board-main > .bank-button {
+    grid-column: 1 / -1;
+  }
+
+  .board .panel {
+    margin: 10px 0;
+  }
+
+  /* Let the host dashboard open wider so the player controls fit a row. */
+  .host-body fieldset {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px 16px;
+  }
+
+  .host-body fieldset button {
+    grid-column: 1 / -1;
+  }
+
+  .host-actions {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .player-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .player-actions {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .pot-value {
+    font-size: 4rem;
+  }
+}
+

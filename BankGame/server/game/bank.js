@@ -60,6 +60,8 @@ export function createGame(rules) {
     rollNumber: 0,
     pot: 0,
     lastRoll: null,
+    /** How the most recent round ended — drives the "round over" screen. */
+    lastRoundResult: null,
     players: [],
     winnerIds: [],
   };
@@ -104,6 +106,10 @@ export function removePlayer(state, playerId) {
   // waiting on nobody.
   if (next.phase === PHASE.PLAYING && !next.players.some((p) => p.inRound)) {
     next.phase = PHASE.ROUND_OVER;
+    next.lastRoundResult = {
+      reason: 'noPlayersLeft',
+      round: next.round,
+    };
   }
   return next;
 }
@@ -138,6 +144,7 @@ export function startGame(state) {
   next.rollNumber = 0;
   next.pot = 0;
   next.lastRoll = null;
+  next.lastRoundResult = null;
   next.winnerIds = [];
   next.players.forEach((p) => {
     p.score = 0;
@@ -233,6 +240,11 @@ export function applyRoll(state, dice) {
       p.inRound = false;
     });
     next.phase = PHASE.ROUND_OVER;
+    next.lastRoundResult = {
+      reason: 'busted',
+      round: next.round,
+      potLost: potBefore,
+    };
     events.push({ kind: FEED_KIND.ROUND_BUSTED, round: next.round, lostIds, potLost: potBefore });
     events.push({ kind: FEED_KIND.ROUND_ENDED, round: next.round });
   }
@@ -274,6 +286,11 @@ export function bank(state, playerId) {
   // Nobody left to play for: the round is over without needing another roll.
   if (!next.players.some((p) => p.inRound)) {
     next.phase = PHASE.ROUND_OVER;
+    next.lastRoundResult = {
+      reason: 'allBanked',
+      round: next.round,
+      pot: next.pot,
+    };
     events.push({ kind: FEED_KIND.ROUND_ENDED, round: next.round });
   }
 
@@ -299,6 +316,7 @@ export function startNextRound(state) {
   next.rollNumber = 0;
   next.pot = 0;
   next.lastRoll = null;
+  next.lastRoundResult = null;
   next.phase = PHASE.PLAYING;
   next.players.forEach((p) => {
     p.inRound = true;

@@ -110,7 +110,7 @@ export function registerHandlers(io, deps = {}) {
       [C2S.RENAME_PLAYER, onRename],
       [C2S.ADJUST_SCORE, onAdjustScore],
       [C2S.FORCE_ROLL, onForceRoll],
-      [C2S.FORCE_END_ROUND, onForceEndRound],
+      [C2S.START_ROUND, onStartRound],
       [C2S.TRANSFER_HOST, onTransferHost],
       [C2S.END_GAME, onEndGame],
       [C2S.PLAY_AGAIN, onPlayAgain],
@@ -328,8 +328,8 @@ export function registerHandlers(io, deps = {}) {
   function onForceRoll(_s, room) {
     return room.doRoll();
   }
-  function onForceEndRound(_s, room) {
-    return room.advanceRound();
+  function onStartRound(_s, room) {
+    return room.startRound();
   }
   function onTransferHost(_s, room, p) {
     const target = String(p?.playerId || '');

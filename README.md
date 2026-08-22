@@ -30,13 +30,29 @@ adjustable by the host at creation.
 ## Playing
 
 1. The **host** opens the app, enters their name, and taps **Host a new room**. They get
-   a 6-letter room code and a shareable link.
+   a 6-letter room code and a shareable link. The host normally runs on a desktop and
+   shares their screen; everyone else opens the link on their phone.
 2. Everyone else opens the app on their phone, enters their name and the code
    (or taps the share link).
 3. The host taps **Start game** once the table is full (2–12 players).
-4. Dice roll automatically. **Tap BANK** when the pot looks good to you. The host
-   leads the game but plays just like everyone else — they can also set rules, kick or
-   rename players, adjust a score, force a roll/advance, or end the game.
+4. Dice roll automatically. A big progress bar shows everyone exactly how far into the
+   game we are, and the current **pot** is always on screen. **Tap BANK** when the pot
+   looks good to you. The host leads the game but plays just like everyone else.
+5. A round does **not** auto-start. When a round ends (a 7 busts it or everyone banks),
+   every device shows a **round-over** summary — what happened and who earned what. The
+   host then taps **Start round** to kick off the next one whenever the table is ready,
+   so friendly debate over "should we push again?" doesn't get steamrolled by a clock.
+
+The host's controls live behind the **Host dashboard**: set rules (lobby only), pause or
+resume the auto-roll, roll early, correct a score, rename/kick players, transfer host,
+or end the game. Because the host is on a big screen, the dashboard (and the whole board)
+opens into a roomier two-column layout on desktop while staying single-column on phones.
+
+> **Fair dice.** The server rolls the two dice with Node's built-in
+> `node:crypto.randomInt` — a cryptographically secure, uniformly distributed generator
+> — so every face 1–6 is equally likely and rolls can't be predicted from what came before.
+> This is verified by a statistical (Pearson chi-square) test in the unit suite, in
+> addition to the engine's deterministic seeded-RNG tests.
 
 A phone that locks its screen or a browser refresh doesn't lose anything: players are
 kept on the roster (shown greyed-out) with their score intact, and rejoin with a stored

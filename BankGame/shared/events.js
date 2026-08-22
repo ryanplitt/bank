@@ -21,7 +21,7 @@ export const C2S = {
   RENAME_PLAYER: 'host:rename',
   ADJUST_SCORE: 'host:adjustScore',
   FORCE_ROLL: 'host:forceRoll',
-  FORCE_END_ROUND: 'host:forceEndRound',
+  START_ROUND: 'host:startRound',
   TRANSFER_HOST: 'host:transfer',
   END_GAME: 'host:endGame',
   PLAY_AGAIN: 'host:playAgain',

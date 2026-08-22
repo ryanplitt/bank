@@ -136,7 +136,7 @@ describe('game flow', () => {
     room.bankPlayer('host');
     room.bankPlayer('p2');
     const scoreHost = room.state.players.find((p) => p.id === 'host').score;
-    expect(room.advanceRound().ok).toBe(true);
+    expect(room.startRound().ok).toBe(true);
     expect(room.state.round).toBe(2);
     expect(room.state.players.find((p) => p.id === 'host').score).toBe(scoreHost);
     expect(room.state.players.every((p) => p.inRound)).toBe(true);
@@ -152,7 +152,7 @@ describe('game flow', () => {
     room.bankPlayer('p2');
     expect(room.state.phase).toBe('roundOver');
     expect(room.nextRollAt).toBeNull(); // clock stopped
-    room.advanceRound();
+    room.startRound();
     expect(room.nextRollAt).toBeGreaterThan(0); // clock restarted
   });
 

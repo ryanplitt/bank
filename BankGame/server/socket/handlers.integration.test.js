@@ -162,7 +162,7 @@ describe('full game over the wire', () => {
     await p2.waitError('NOT_HOST');
 
     // The host advances to the next round.
-    host.emit(C2S.FORCE_END_ROUND, {});
+    host.emit(C2S.START_ROUND, {});
     const next = await host.waitFor((s) => s.round === 2, 'round 2 started');
     expect(next.phase).toBe('playing');
     expect(next.players.every((p) => p.inRound)).toBe(true);

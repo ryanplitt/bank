@@ -88,7 +88,7 @@ test('create → join → start → play → bank → next round → end', async
   await p3Page.waitForSelector('.board', { timeout: WAIT });
 
   // Round begins; everyone is in and there's a countdown.
-  await expect(hostPage.locator('.round')).toContainText('Round 1');
+  await expect(hostPage.locator('.round-progress-label')).toContainText('Round 1 of 15');
   await expect(hostPage.locator('.pot-value')).toBeVisible();
 
   // Wait for / force the pot to be non-zero, then everyone banks.
@@ -115,21 +115,18 @@ test('create → join → start → play → bank → next round → end', async
   await clickBank(p2Page);
   await clickBank(p3Page);
 
-  // All banked → round is over → the host advances to round 2.
+  // All banked → round is over → the host sees the round-over screen and clicks
+  // "Start round 2 of 15" to advance.
+  await hostPage.waitForSelector('.round-over', { timeout: WAIT });
+  await hostPage.getByRole('button', { name: /Start Round 2 of 15/ }).click();
   await hostPage.waitForFunction(() => {
-    const round = document.querySelector('.round');
-    return round && round.textContent.includes('Round 1');
-  }, undefined, { timeout: WAIT });
-  await hostPage.getByText('Host controls').click();
-  await hostPage.getByRole('button', { name: /Force end round/ }).click();
-  await hostPage.waitForFunction(() => {
-    const round = document.querySelector('.round');
-    return round && round.textContent.includes('Round 2');
+    const label = document.querySelector('.round-progress-label');
+    return label && /Round\s+2\s+of/.test(label.textContent);
   }, undefined, { timeout: WAIT });
 
-  // Host ends the game early to finish the smoke test quickly. The host panel
-  // is already open from the force-end-round step above.
-  await hostPage.getByRole('button', { name: /End game now/ }).click();
+  // Host ends the game early to finish the smoke test quickly.
+  await hostPage.getByText('Host dashboard').click();
+  await hostPage.getByRole('button', { name: /End game/ }).click();
   await hostPage.waitForSelector('.gameover', { timeout: WAIT });
   await p3Page.waitForSelector('.gameover', { timeout: WAIT });
   await expect(hostPage.locator('.gameover h2')).toContainText('Game over');
