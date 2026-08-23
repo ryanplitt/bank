@@ -28,7 +28,10 @@ export const DEFAULT_RULES = Object.freeze({
   /** Behaviour of doubles during the safe rolls. See DOUBLES_MODES. */
   doublesDuringSafeRolls: 'sum',
   /** Seconds between automatic rolls; the banking window. */
-  rollIntervalSeconds: 8,
+  rollIntervalSeconds: 6,
+  /** Whether banking resets the shared countdown for everyone (false = one
+   *  fixed deadline that everyone races against). */
+  resetTimerOnBank: false,
 });
 
 export const RULE_LIMITS = Object.freeze({
@@ -63,6 +66,11 @@ export function normalizeRules(partial, base = DEFAULT_RULES) {
     ? input.doublesDuringSafeRolls
     : start.doublesDuringSafeRolls;
 
+  const resetTimerOnBank =
+    typeof input.resetTimerOnBank === 'boolean'
+      ? input.resetTimerOnBank
+      : start.resetTimerOnBank;
+
   return Object.freeze({
     rounds: clampInt(input.rounds, start.rounds, RULE_LIMITS.rounds),
     safeRolls: clampInt(input.safeRolls, start.safeRolls, RULE_LIMITS.safeRolls),
@@ -73,6 +81,7 @@ export function normalizeRules(partial, base = DEFAULT_RULES) {
       start.rollIntervalSeconds,
       RULE_LIMITS.rollIntervalSeconds,
     ),
+    resetTimerOnBank,
   });
 }
 
@@ -89,6 +98,7 @@ export function describeRules(rules) {
       : `doubles add their sum for the first ${r.safeRolls} rolls`;
   return (
     `${r.rounds} rounds · first ${r.safeRolls} rolls are safe (a 7 pays ${r.sevenBonus}) · ` +
-    `${doubles} · ${r.rollIntervalSeconds}s between rolls`
+    `${doubles} · ${r.rollIntervalSeconds}s between rolls · ` +
+    `banking ${r.resetTimerOnBank ? 'resets' : 'does not reset'} the countdown`
   );
 }

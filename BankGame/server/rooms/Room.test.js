@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Room } from './Room.js';
 import { RoomManager } from './RoomManager.js';
 
@@ -154,6 +154,51 @@ describe('game flow', () => {
     expect(room.nextRollAt).toBeNull(); // clock stopped
     room.startRound();
     expect(room.nextRollAt).toBeGreaterThan(0); // clock restarted
+  });
+
+  it('does not reset the shared countdown when someone banks (default)', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = makeRoom();
+      room.join('p2', 'Brie');
+      room.start();
+      room.doRoll(); // pot builds, schedules a fresh deadline
+      const afterRoll = room.nextRollAt;
+      expect(afterRoll).toBeGreaterThan(0);
+
+      // Time passes; the deadline drifts into the past but is NOT being refreshed.
+      vi.advanceTimersByTime(1000);
+
+      room.bankPlayer('host'); // still playing (p2 remains)
+      expect(room.state.phase).toBe('playing');
+      // The deadline is unchanged by the bank: everyone races the same clock.
+      expect(room.nextRollAt).toBe(afterRoll);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resets the shared countdown when resetTimerOnBank is enabled', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = makeRoom();
+      room.join('p2', 'Brie');
+      // Enable the host option before starting.
+      const rules = { ...room.state.rules, resetTimerOnBank: true };
+      room.state = Object.assign({}, room.state, { rules });
+      room.start();
+      room.doRoll();
+      const before = room.nextRollAt;
+      expect(before).toBeGreaterThan(0);
+
+      // Time passes, then a bank schedules a brand-new window from now.
+      vi.advanceTimersByTime(1000);
+      room.bankPlayer('host');
+      expect(room.state.phase).toBe('playing');
+      expect(room.nextRollAt).toBeGreaterThan(before);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('play again resets scores and returns to the lobby', () => {

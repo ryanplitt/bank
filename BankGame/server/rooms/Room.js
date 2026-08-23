@@ -331,7 +331,10 @@ export class Room {
     this.publish();
     for (const e of result.events) this.narrate(e);
     if (this.state.phase === PHASE.PLAYING) {
-      this.scheduleNextRoll();
+      // By default banking does not reset the shared countdown — everyone races
+      // the same deadline. Only when the host enables resetTimerOnBank do we
+      // schedule a fresh window for the remaining players.
+      if (this.state.rules.resetTimerOnBank) this.scheduleNextRoll();
     } else {
       this.clearRollTimer();
     }

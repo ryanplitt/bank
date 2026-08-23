@@ -92,6 +92,14 @@ function ruleFields(draft, set, setDraft) {
           onChange={set('rollIntervalSeconds')}
         />
       </label>
+      <label className="rule-check">
+        <input
+          type="checkbox"
+          checked={Boolean(draft.resetTimerOnBank)}
+          onChange={(e) => setDraft((d) => ({ ...d, resetTimerOnBank: e.target.checked }))}
+        />
+        Reset countdown when someone banks
+      </label>
       <label>
         Doubles during safe rolls
         <select

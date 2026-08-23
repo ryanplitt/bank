@@ -7,6 +7,7 @@ import GameOver from './GameOver.jsx';
 import RoundOver from './RoundOver.jsx';
 import RoundProgress from './RoundProgress.jsx';
 import DiceTray from './DiceTray.jsx';
+import BustReveal from './BustReveal.jsx';
 import Pot from './Pot.jsx';
 
 /**
@@ -18,6 +19,7 @@ import Pot from './Pot.jsx';
 export default function GameBoard({ state, me, isHost, canBank, feed, bank, host }) {
   const { round, rules, pot, lastRoll, nextRollAt, players, phase } = state;
   const roundOver = phase === 'roundOver';
+  const busted = phase === 'roundOver' && state.lastRoundResult?.reason === 'busted';
 
   if (phase === 'gameOver') {
     return <GameOver state={state} me={me} isHost={isHost} host={host} />;
@@ -30,8 +32,10 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
         {state.paused && <div className="paused-chip">⏸ paused</div>}
       </header>
 
-      {roundOver ? (
+      {roundOver && !busted ? (
         <RoundOver state={state} isHost={isHost} host={host} />
+      ) : busted ? (
+        <BustReveal state={state} />
       ) : (
         <div className="board-main">
           <div className="dice-zone">

@@ -87,6 +87,19 @@ label select {
   margin-top: 6px;
 }
 
+/* Checkbox rule fields (e.g. "reset countdown on bank") sit inline. */
+label.rule-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+label.rule-check input {
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
 button {
   font: inherit;
   cursor: pointer;
@@ -488,8 +501,11 @@ button:disabled {
   box-shadow: 0 0 0 3px var(--accent), 0 6px 0 rgba(0, 0, 0, 0.4);
 }
 
-/* Roll-in animation: two dice tumble in a little, keyed so it restarts each
-   time a new authoritative roll lands. */
+/* Roll-in + settle animation. Each new authoritative roll remounts the dice
+   (keyed by rollNumber) so this plays once per roll for everyone. There are
+   three cosmetic phases, controlled by a `--shaking` / `--final` class swap:
+     shaking → die-shake (jitter) + cycle-anim (face flurry)
+     final   → die-settle (weighted land) + die-roll (entry) */
 .dice-anim {
   display: flex;
   gap: 18px;
@@ -517,6 +533,54 @@ button:disabled {
   }
 }
 
+/* While a roll is "live" the same faces stay put but the die wiggles. */
+.die--shaking {
+  animation: die-shake 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes die-shake {
+  from {
+    transform: translateX(-5px) rotate(-6deg);
+  }
+  to {
+    transform: translateX(5px) rotate(6deg);
+  }
+}
+
+/* Landing frame: rebounds off the felt like a weighted die. */
+.die--final {
+  animation: die-settle 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes die-settle {
+  0% {
+    transform: translateY(-14px) scale(1.12);
+  }
+  55% {
+    transform: translateY(2px) scale(0.97);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Face flurry during the shake — the pip dots themselves blur slightly so the
+   die reads as mid-roll rather than settled. */
+.die--shaking .die-pip::after {
+  animation: pip-blur 0.15s linear infinite alternate;
+}
+
+@keyframes pip-blur {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+}
+
 /* A gentle idle wobble on doubles so they read as special. */
 .die--doubles {
   animation-name: die-roll, doubles-pop;
@@ -531,6 +595,47 @@ button:disabled {
   }
   50% {
     transform: scale(1.06);
+  }
+}
+
+/* Sentinel styling per roll kind, driven by .dice-anim[data-kind]. */
+.dice-anim[data-kind='safeSeven'] .die:not(.die--shaking) {
+  box-shadow: 0 0 0 3px var(--accent), 0 0 22px rgba(244, 197, 66, 0.75),
+    0 6px 0 rgba(0, 0, 0, 0.4);
+}
+.dice-anim[data-kind='safeSeven'] .die--final {
+  animation-name: die-settle, seven-gold;
+  animation-duration: 0.5s, 1.2s;
+}
+
+@keyframes seven-gold {
+  50% {
+    box-shadow: 0 0 0 4px var(--accent), 0 0 34px rgba(244, 197, 66, 1);
+  }
+}
+
+.dice-anim[data-kind='bust'] .die--final {
+  animation-name: die-settle, bust-shake;
+  animation-duration: 0.5s, 0.6s;
+}
+.dice-anim[data-kind='bust'] .die {
+  box-shadow: 0 0 0 3px var(--danger), 0 0 22px rgba(231, 76, 60, 0.7),
+    0 6px 0 rgba(0, 0, 0, 0.4);
+}
+
+@keyframes bust-shake {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+  25% {
+    transform: translateX(-7px) rotate(-8deg);
+  }
+  50% {
+    transform: translateX(7px) rotate(8deg);
+  }
+  75% {
+    transform: translateX(-4px) rotate(-4deg);
   }
 }
 
@@ -712,6 +817,51 @@ button:disabled {
 
 .gameover .panel {
   text-align: left;
+}
+
+/* ---------------- round over ---------------- */
+
+/* ---------------- seven-out reveal ---------------- */
+
+.bust-reveal {
+  text-align: center;
+  padding: 18px 0 8px;
+}
+
+.seven-flag {
+  display: inline-block;
+  margin-top: 20px;
+  padding: 16px 28px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #4a1f22, #3a2023);
+  border: 2px solid var(--danger);
+  box-shadow: 0 0 30px rgba(231, 76, 60, 0.45), inset 0 0 20px rgba(231, 76, 60, 0.15);
+  opacity: 0;
+  transform: scale(0.6) rotate(-4deg);
+  transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.seven-flag--show {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+}
+
+.seven-flag-title {
+  font-size: 2.4rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #ffb3ad;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+.seven-flag-sub {
+  margin-top: 6px;
+  color: #ffd7d3;
+  font-size: 0.95rem;
+}
+
+.seven-flag-sub strong {
+  color: var(--danger);
 }
 
 /* ---------------- round over ---------------- */

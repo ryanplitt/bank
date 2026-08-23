@@ -36,6 +36,8 @@ describe('createGame', () => {
     expect(state.rules).toEqual(DEFAULT_RULES);
     expect(state.pot).toBe(0);
     expect(state.round).toBe(0);
+    expect(state.rules.rollIntervalSeconds).toBe(6);
+    expect(state.rules.resetTimerOnBank).toBe(false);
   });
 
   it('coerces hostile rule input instead of trusting it', () => {
@@ -44,12 +46,14 @@ describe('createGame', () => {
       safeRolls: -4,
       rollIntervalSeconds: 'banana',
       doublesDuringSafeRolls: 'evil',
+      resetTimerOnBank: 'yes',
       __proto__: { polluted: true },
     });
     expect(state.rules.rounds).toBe(30); // clamped to the max
     expect(state.rules.safeRolls).toBe(0); // clamped to the min
     expect(state.rules.rollIntervalSeconds).toBe(DEFAULT_RULES.rollIntervalSeconds);
     expect(state.rules.doublesDuringSafeRolls).toBe('sum');
+    expect(state.rules.resetTimerOnBank).toBe(false); // non-boolean falls back
     expect(state.rules.polluted).toBeUndefined();
   });
 });

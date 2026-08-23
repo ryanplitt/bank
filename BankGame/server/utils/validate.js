@@ -88,5 +88,9 @@ export function validateRules(raw) {
       return { valid: false, reason: `${key} is out of range` };
     }
   }
+  // Booleans are validated separately (they are not range-clamped).
+  if (raw.resetTimerOnBank !== undefined && typeof raw.resetTimerOnBank !== 'boolean') {
+    return { valid: false, reason: 'resetTimerOnBank must be a boolean' };
+  }
   return { valid: true, rules };
 }

@@ -61,6 +61,13 @@ describe('validateRules', () => {
     expect(res.rules.rounds).toBe(10);
   });
 
+  it('accepts a boolean resetTimerOnBank and rejects a non-boolean', () => {
+    expect(validateRules({ resetTimerOnBank: true }).valid).toBe(true);
+    expect(validateRules({ resetTimerOnBank: false }).valid).toBe(true);
+    expect(validateRules({ resetTimerOnBank: 'yes' }).valid).toBe(false);
+    expect(validateRules({ resetTimerOnBank: 1 }).valid).toBe(false);
+  });
+
   it('rejects out-of-range values rather than silently clamping', () => {
     expect(validateRules({ rounds: 999 }).valid).toBe(false);
     expect(validateRules({ safeRolls: -1 }).valid).toBe(false);
