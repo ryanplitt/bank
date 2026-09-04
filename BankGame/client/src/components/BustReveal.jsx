@@ -9,10 +9,13 @@ import DiceTray from './DiceTray.jsx';
  * Deterministic and client-side: it is driven only by shared server state
  * (lastRoll + lastRoundResult), so late joiners/reconnects land here too, and
  * all devices reveal and advance in sync.
+ *
+ * This screen only ever *shows* the reveal. Deciding what comes after it is
+ * GameBoard's job, so `onDone` must actually move the board on — otherwise the
+ * round has no way to end.
  */
-export default function BustReveal({ state }) {
+export default function BustReveal({ state, onDone }) {
   const [showFlag, setShowFlag] = useState(false);
-  const [done, setDone] = useState(false);
   const potLost = state.lastRoundResult ? state.lastRoundResult.potLost ?? 0 : 0;
 
   // Wait for the shake to settle, then pop in the flag.
@@ -21,13 +24,12 @@ export default function BustReveal({ state }) {
     return () => clearTimeout(t);
   }, []);
 
-  // After a natural beat, hand over to the standard round-over screen.
+  // After a natural beat, hand over to the standard round-over screen, which
+  // carries the host's "start next round" action.
   useEffect(() => {
-    const t = setTimeout(() => setDone(true), 3000);
+    const t = setTimeout(onDone, 3000);
     return () => clearTimeout(t);
-  }, []);
-
-  if (done) return null;
+  }, [onDone]);
 
   return (
     <div className="bust-reveal">

@@ -1,3 +1,5 @@
+import { useCallback, useState } from 'react';
+
 import Countdown from './Countdown.jsx';
 import BankButton from './BankButton.jsx';
 import Scoreboard from './Scoreboard.jsx';
@@ -19,7 +21,18 @@ import Pot from './Pot.jsx';
 export default function GameBoard({ state, me, isHost, canBank, feed, bank, host }) {
   const { round, rules, pot, lastRoll, nextRollAt, players, phase } = state;
   const roundOver = phase === 'roundOver';
-  const busted = phase === 'roundOver' && state.lastRoundResult?.reason === 'busted';
+  const busted = roundOver && state.lastRoundResult?.reason === 'busted';
+
+  // Which round's bust reveal has already played out here. Storing the round
+  // number rather than a boolean means the next bust re-arms the reveal without
+  // needing to be reset, and a re-render can never replay one we've finished.
+  const [revealedRound, setRevealedRound] = useState(null);
+  // Stable per round, so an unrelated state push can't restart the reveal's
+  // hand-off timer and strand the board on the bust screen.
+  const endReveal = useCallback(() => setRevealedRound(round), [round]);
+  // The reveal is a beat *before* the round-over screen, never a replacement:
+  // once it has played, busted rounds land on RoundOver like any other.
+  const showReveal = busted && revealedRound !== round;
 
   if (phase === 'gameOver') {
     return <GameOver state={state} me={me} isHost={isHost} host={host} />;
@@ -32,10 +45,10 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
         {state.paused && <div className="paused-chip">⏸ paused</div>}
       </header>
 
-      {roundOver && !busted ? (
+      {showReveal ? (
+        <BustReveal key={round} state={state} onDone={endReveal} />
+      ) : roundOver ? (
         <RoundOver state={state} isHost={isHost} host={host} />
-      ) : busted ? (
-        <BustReveal state={state} />
       ) : (
         <div className="board-main">
           <div className="dice-zone">

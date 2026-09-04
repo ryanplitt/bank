@@ -36,6 +36,14 @@ import { sanitizeName, validateRules } from '../utils/validate.js';
 /** A room with no activity for this long is reaped by the RoomManager. */
 export const ROOM_TTL_MS = 30 * 60 * 1000;
 
+/**
+ * A room nobody is connected to is reaped this long after the last player
+ * dropped. Far shorter than ROOM_TTL_MS: an abandoned room holds a code and a
+ * MAX_ROOMS slot, and nothing can happen in it until someone comes back. The
+ * slack is what lets a refresh, a reconnect or a phone waking up resume in.
+ */
+export const EMPTY_ROOM_TTL_MS = 2 * 60 * 1000;
+
 export class Room {
   /**
    * @param {string} code The room code this instance is known by.
@@ -69,6 +77,8 @@ export class Room {
     this.paused = false;
     /** Last activity, used by the TTL sweeper. */
     this.lastActiveAt = Date.now();
+    /** When the last connected player dropped, or null while anyone is here. */
+    this.emptySince = null;
     /** How long a disconnected host keeps host before it transfers (ms). */
     this.hostGraceMs = opts.hostGraceMs || 15_000;
     /** One-shot timer that transfers the host after a too-long absence. */
@@ -113,7 +123,22 @@ export class Room {
   attachSocket(playerId) {
     const entry = this.players.get(playerId);
     if (entry) entry.connected = true;
+    this.refreshEmptiness();
     this.touch();
+  }
+
+  /**
+   * Recompute whether this room still has anybody in it.
+   *
+   * "Abandoned" deliberately means nobody is *connected*, not that the roster
+   * is empty: disconnected players are kept on the roster precisely so they can
+   * resume with score and host role intact, so an empty roster never happens
+   * through the disconnect path. The manager sweeps on this rather than making
+   * an abandoned room wait out the full idle TTL.
+   */
+  refreshEmptiness() {
+    const anyConnected = [...this.players.values()].some((p) => p.connected);
+    this.emptySince = anyConnected ? null : (this.emptySince ?? Date.now());
   }
 
   /** A socket left the room's socket group (not necessarily the game). */
@@ -174,6 +199,7 @@ export class Room {
       // the role transfers to the next player so the table can continue.
       if (playerId === this.hostId) this.armHostGrace();
     }
+    this.refreshEmptiness();
     this.touch();
     return this.players.size === 0;
   }
@@ -184,6 +210,7 @@ export class Room {
     const name = this.players.get(playerId).name;
     this.state = removePlayer(this.state, playerId);
     this.players.delete(playerId);
+    this.refreshEmptiness();
     this.publish();
     this.narrate({ kind: FEED_KIND.PLAYER_KICKED, name });
     this.reelectHostIfNeeded();

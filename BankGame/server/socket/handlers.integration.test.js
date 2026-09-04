@@ -385,6 +385,33 @@ describe('hardening: malformed input leaves the server up and the game consisten
     expect(c.errors.some((e) => e.code === 'RATE_LIMITED')).toBe(true);
   });
 
+  it('retires the old socket when a player reconnects, without leaking its id', async () => {
+    const host = connect();
+    await host.once('connect');
+    host.emit(C2S.CREATE_GAME, { name: 'Host' });
+    const { code, playerId, token } = await host.once(S2C.SESSION);
+    const room = manager.get(code);
+    expect(room.socketIds.size).toBe(1);
+
+    // Five overlapping sockets for the same player — a refresh racing a slow
+    // rejoin. Each admit must retire the one before it, so exactly one socket
+    // is ever attached no matter how many times they bounce.
+    const extras = [];
+    for (let i = 0; i < 5; i += 1) {
+      const c = connect();
+      await c.once('connect');
+      c.emit(C2S.RESUME, { code, playerId, token });
+      await c.waitFor((s) => s.code === code, `resume ${i}`);
+      extras.push(c);
+      expect(room.socketIds.size).toBe(1);
+    }
+
+    // And once they all close, the room is not left holding dead ids.
+    for (const c of extras) c.socket.close();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(room.socketIds.size).toBe(0);
+  });
+
   it('kicks a player and detaches their socket from the room', async () => {
     const host = connect();
     await host.once('connect');

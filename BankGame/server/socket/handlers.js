@@ -139,6 +139,10 @@ export function registerHandlers(io, deps = {}) {
         other.data?.game?.code === code
       ) {
         other.leave(code);
+        // Drop its id too: this socket's own disconnect handler bails out once
+        // `data.game` is null (deliberately, so it can't mark a present player
+        // absent), which would otherwise strand the id here for the room's life.
+        room.socketIds.delete(other.id);
         other.data.game = null;
       }
     }
@@ -158,8 +162,10 @@ export function registerHandlers(io, deps = {}) {
     room.socketIds.delete(socket.id);
     socket.leave(code);
     room.markDisconnected(ctx.playerId);
-    // If the room is now truly empty, drop it from the manager.
-    if (room.players.size === 0) manager.delete(code);
+    // Deliberately not dropped here: the roster outlives a disconnect so a
+    // refresh can resume with score and host intact, so it is never empty at
+    // this point. The manager's sweeper reclaims the room once nobody has been
+    // connected for EMPTY_ROOM_TTL_MS.
     logger.info({ event: 'socket_disconnected', code, playerId: ctx.playerId });
     socket.data.game = null;
   }

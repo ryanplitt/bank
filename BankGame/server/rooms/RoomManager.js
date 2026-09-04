@@ -6,13 +6,20 @@
  * immortal entry. Here, rooms are reaped when they sit idle past ROOM_TTL_MS —
  * a sweep happens on a slow interval AND lazily on each access, so a fresh
  * server never accumulates dead rooms even if the interval never fires.
+ *
+ * A room everyone has *left* is reaped sooner, on EMPTY_ROOM_TTL_MS. Players
+ * stay on the roster across a disconnect so they can resume, which means an
+ * abandoned room's roster never empties on its own — without this it would sit
+ * on a code and a MAX_ROOMS slot for the full half hour with nobody in it.
  */
 
-import { Room, ROOM_TTL_MS } from './Room.js';
+import { Room, ROOM_TTL_MS, EMPTY_ROOM_TTL_MS } from './Room.js';
 
 export class RoomManager {
   constructor(options = {}) {
     this.ttlMs = options.ttlMs || ROOM_TTL_MS;
+    /** Grace given to a room nobody is connected to. Never longer than ttlMs. */
+    this.emptyTtlMs = options.emptyTtlMs ?? Math.min(this.ttlMs, EMPTY_ROOM_TTL_MS);
     /** @type {Map<string, Room>} */
     this.rooms = new Map();
     /** Total created — used to cap the room count if ever needed. */
@@ -52,12 +59,18 @@ export class RoomManager {
     return this.rooms.size;
   }
 
-  /** Sweep idle rooms (> TTL since last activity). Returns codes reaped. */
+  /**
+   * Sweep rooms that are idle (> ttlMs since any activity) or abandoned
+   * (> emptyTtlMs with nobody connected). Returns the codes reaped.
+   */
   sweepOnce() {
     const now = Date.now();
     const reaped = [];
     for (const [code, room] of this.rooms) {
-      if (now - room.lastActiveAt > this.ttlMs) {
+      const idle = now - room.lastActiveAt > this.ttlMs;
+      const abandoned =
+        room.emptySince !== null && now - room.emptySince > this.emptyTtlMs;
+      if (idle || abandoned) {
         room.destroy();
         this.rooms.delete(code);
         reaped.push(code);

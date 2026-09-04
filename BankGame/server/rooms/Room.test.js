@@ -225,6 +225,46 @@ describe('game flow', () => {
   });
 });
 
+describe('room emptiness', () => {
+  it('marks the room empty only once the last connected player drops', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    expect(room.emptySince).toBeNull();
+
+    room.markDisconnected('p2');
+    expect(room.emptySince).toBeNull(); // the host is still here
+
+    room.markDisconnected('host');
+    expect(typeof room.emptySince).toBe('number');
+  });
+
+  it('clears the empty marker when somebody comes back', () => {
+    const { room } = makeRoom();
+    room.markDisconnected('host');
+    expect(room.emptySince).not.toBeNull();
+    room.attachSocket('host');
+    expect(room.emptySince).toBeNull();
+  });
+
+  it('still keeps the roster so an empty room can be resumed into', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    room.markDisconnected('host');
+    room.markDisconnected('p2');
+    expect(room.players.size).toBe(2); // nobody spliced out
+    expect(room.emptySince).not.toBeNull();
+  });
+
+  it('counts a room empty once everyone has been kicked out of it', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    room.kick('p2');
+    room.kick('host');
+    expect(room.players.size).toBe(0);
+    expect(room.emptySince).not.toBeNull();
+  });
+});
+
 describe('RoomManager', () => {
   it('creates, looks up, and deletes rooms', () => {
     const mgr = new RoomManager();
@@ -256,6 +296,32 @@ describe('RoomManager', () => {
     const mgr = new RoomManager({ ttlMs: 1000 });
     mgr.create('AAA111', 'host'); // just touched
     expect(mgr.sweepOnce()).toEqual([]);
+  });
+
+  it('reaps an abandoned room once nobody has been connected for the grace', () => {
+    const mgr = new RoomManager({ ttlMs: 60_000, emptyTtlMs: 1000 });
+    const r = mgr.create('AAA111', 'host');
+    r.markDisconnected('host'); // everyone has closed their tab
+    expect(mgr.sweepOnce()).toEqual([]); // still inside the grace
+    r.emptySince = Date.now() - 5000; // simulate the wait
+    expect(mgr.sweepOnce()).toContain('AAA111');
+    expect(mgr.has('AAA111')).toBe(false);
+  });
+
+  it('holds an abandoned room through the grace so a refresh can resume', () => {
+    const mgr = new RoomManager({ ttlMs: 60_000, emptyTtlMs: 60_000 });
+    const r = mgr.create('AAA111', 'host');
+    r.markDisconnected('host');
+    r.emptySince = Date.now() - 5000;
+    expect(mgr.sweepOnce()).toEqual([]);
+    expect(mgr.has('AAA111')).toBe(true);
+  });
+
+  it('never reaps a room somebody is still connected to', () => {
+    const mgr = new RoomManager({ ttlMs: 60_000, emptyTtlMs: 1 });
+    mgr.create('AAA111', 'host'); // host is connected
+    expect(mgr.sweepOnce()).toEqual([]);
+    expect(mgr.has('AAA111')).toBe(true);
   });
 
   it('sweeper starts and can be stopped without blocking the process', () => {
