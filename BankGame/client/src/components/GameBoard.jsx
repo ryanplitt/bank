@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import Countdown from './Countdown.jsx';
 import BankButton from './BankButton.jsx';
@@ -11,6 +11,17 @@ import RoundProgress from './RoundProgress.jsx';
 import DiceTray from './DiceTray.jsx';
 import BustReveal from './BustReveal.jsx';
 import Pot from './Pot.jsx';
+import PotHistory from './PotHistory.jsx';
+
+/**
+ * The narration feed kinds that briefly tint the whole board — a green flash
+ * when someone banks, red when the 7 sweeps the pot. Everyone watches the
+ * shared screen; the flash marks the moment without covering it.
+ */
+const FLASH_FEED_KINDS = new Set(['banked', 'roundBusted']);
+
+/** How many of the feed's roll lines the pot-history strip shows. */
+const POT_HISTORY_SIZE = 8;
 
 /**
  * The main in-game view. Every player sees a compact header with round progress,
@@ -34,14 +45,46 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
   // once it has played, busted rounds land on RoundOver like any other.
   const showReveal = busted && revealedRound !== round;
 
+  // The state snapshot only carries the newest roll; the history strip is
+  // rebuilt from the narration feed's roll lines instead (the feed is the
+  // cheap, always-kept per-roll history here). Newest last, capped.
+  const lastRolls = feed.filter((e) => e.kind === 'roll').slice(-POT_HISTORY_SIZE);
+
+  // Round drama flash: the newest feed line being a bank or a bust briefly
+  // tints the whole board. Same animation-restart trick as Pot's pulse —
+  // class off, forced reflow, class on — so every event re-triggers it.
+  const boardRef = useRef(null);
+  // Keys off the whole `feed`: every new narration line gets a fresh array
+  // identity, so the longest-history check re-runs for each of them; lines
+  // that aren't banks/busts exit the guard before touching the DOM.
+  useEffect(() => {
+    const latest = feed.length > 0 ? feed[feed.length - 1] : null;
+    if (!latest || !FLASH_FEED_KINDS.has(latest.kind)) return;
+    const el = boardRef.current;
+    if (!el) return;
+    const variant = latest.kind === 'roundBusted' ? 'bust' : 'bank';
+    el.classList.remove('board-flash--bank', 'board-flash--bust');
+    // Force a reflow so the re-add restarts the animation.
+    void el.offsetWidth;
+    el.classList.add(`board-flash--${variant}`);
+  }, [feed]);
+
+  const boardClass = `board ${isHost ? 'board--host' : ''}`;
+
   if (phase === 'gameOver') {
     return <GameOver state={state} me={me} isHost={isHost} host={host} />;
   }
 
   return (
-    <div className="board">
+    <div className={boardClass} ref={boardRef}>
       <header className="board-head">
-        <RoundProgress round={round} total={rules.rounds} phase={phase} />
+        <RoundProgress
+          round={round}
+          total={rules.rounds}
+          phase={phase}
+          safeRolls={rules.safeRolls}
+          rollNumber={state.rollNumber}
+        />
         {state.paused && <div className="paused-chip">⏸ paused</div>}
       </header>
 
@@ -55,6 +98,7 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
             <Pot value={pot} />
             <DiceTray lastRoll={lastRoll} />
             {lastRoll && <div className="roll-note">{rollNote(lastRoll)}</div>}
+            <PotHistory lastRolls={lastRolls} />
           </div>
 
           {phase === 'playing' && (

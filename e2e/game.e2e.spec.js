@@ -98,6 +98,10 @@ test('create → join → start → play → bank → next round → end', async
     return el && Number(el.textContent) > 0;
   }, undefined, { timeout: WAIT });
 
+  // Pot history is derived from the roll feed — it must be on screen once the
+  // first roll has landed.
+  await expect(hostPage.locator('.pot-history')).toHaveCount(1);
+
   const clickBank = (page) =>
     page.waitForFunction(() => {
       const b = document.querySelector('.bank-button');

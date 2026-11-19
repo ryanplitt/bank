@@ -397,6 +397,25 @@ button:disabled {
   color: var(--text);
 }
 
+/* The round's "safe" opening rolls get a gold edge on the strip plus a small
+   note ("safe until roll 3"). The note lives inside the label row: quiet on
+   phones, prominent on the big shared screen. */
+.round-progress--safe {
+  border-left: 3px solid var(--accent);
+}
+
+.round-progress-safe {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(244, 197, 66, 0.12);
+  color: #ffe08a;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
 .round-progress-pct {
   color: var(--muted);
 }
@@ -651,6 +670,133 @@ button:disabled {
   color: var(--muted);
   font-size: 0.9rem;
   margin: 8px 0;
+}
+
+/* ---------------- pot history ----------------
+   The rolling receipt of the round's pot — compact chips on phones (a
+   horizontal scroll row), opening into legible thumbnail strips on the big
+   shared screen. */
+
+.pot-history {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 6px 0 10px;
+}
+
+.pot-history::-webkit-scrollbar {
+  display: none;
+}
+
+.pot-history-chip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 58px;
+  padding: 7px 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+/* Dashed connector linking one roll's chip to the next. */
+.pot-history-chip + .pot-history-chip {
+  border-left: 3px dashed var(--line);
+}
+
+.pot-history-pips {
+  /* Pip thumbnails only when there's room for them — the strip stays compact
+     on phones. */
+  display: none;
+}
+
+.pot-history-main {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  text-align: center;
+}
+
+/* Colour the chip's score by how the roll resolved. */
+.pot-history-chip[data-kind='safeSeven'] .pot-history-main {
+  color: var(--accent);
+}
+
+.pot-history-chip[data-kind='bust'] .pot-history-main {
+  color: var(--danger);
+}
+
+.pot-history-pot {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.pot-history-die {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: #fff;
+  border-radius: 5px;
+  padding: 1.5px;
+  box-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.35);
+}
+
+.pot-history-pip {
+  width: 3px;
+  height: 3px;
+  margin: auto;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.pot-history-pip.is-on {
+  background: radial-gradient(circle at 35% 30%, #4a4a55, #1a1a1f);
+}
+
+/* ---------------- board flash ----------------
+   Round drama: a brief background tint over the board when a bank (green)
+   or bust (red) lands in the feed. Triggered with the Pot pulse trick —
+   class off, forced reflow, class on — so every event re-triggers rather
+   than joining a half-played animation. Alpha stays low: it marks the
+   moment without fighting the text for attention. */
+
+.board-flash--bank {
+  animation: board-flash-bank 0.35s ease;
+}
+
+@keyframes board-flash-bank {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(52, 224, 138, 0);
+  }
+  50% {
+    /* An inset 9999px shadow doubles as a full-bleed background tint. */
+    box-shadow: inset 0 0 0 9999px rgba(52, 224, 138, 0.05);
+  }
+}
+
+.board-flash--bust {
+  animation: board-flash-bust 0.5s ease;
+}
+
+@keyframes board-flash-bust {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(231, 76, 60, 0);
+  }
+  50% {
+    box-shadow: inset 0 0 0 9999px rgba(231, 76, 60, 0.07),
+      inset 0 6px 14px rgba(231, 76, 60, 0.15);
+  }
 }
 
 /* ---------------- countdown ---------------- */
@@ -992,6 +1138,64 @@ button:disabled {
 
   .pot-value {
     font-size: 4rem;
+  }
+}
+
+/* ---------------- shared-screen (≥900px) host board ----------------
+   The host's board is usually the room's big shared screen. On those widths
+   the scoreboard panel reads bigger and heavier, the round-safe note becomes
+   properly legible, and the pot-history strip opens up into full chips. */
+
+@media (min-width: 900px) {
+  .board--host .scoreboard .row {
+    padding: 12px 10px;
+    font-size: 1.08rem;
+  }
+
+  .board--host .scoreboard .name {
+    font-weight: 700;
+  }
+
+  .board--host .scoreboard .score {
+    font-size: 1.5rem;
+  }
+
+  .round-progress-safe {
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    margin-left: 12px;
+  }
+
+  .pot-history {
+    overflow-x: visible;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0 2px;
+  }
+
+  .pot-history-chip {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+
+  .pot-history-pips {
+    display: flex;
+    gap: 3px;
+  }
+
+  .pot-history-chip[data-kind='safeSeven'] .pot-history-die {
+    box-shadow:
+      0 0 0 1.5px var(--accent),
+      0 1.5px 0 rgba(0, 0, 0, 0.35);
+  }
+
+  .pot-history-chip[data-kind='bust'] .pot-history-die {
+    box-shadow:
+      0 0 0 1.5px var(--danger),
+      0 1.5px 0 rgba(0, 0, 0, 0.35);
   }
 }
 
