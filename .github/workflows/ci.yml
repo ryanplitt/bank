@@ -28,5 +28,19 @@ jobs:
       - name: Build client
         run: npm run build
 
+      # Playwright smoke suite: boots the real server against the built client
+      # (client/dist/ from the previous step) and drives three browser contexts
+      # through a full game. Config: testDir ./e2e, workers: 1 (the spec owns a
+      # shared server on a fixed port), headless, trace retain-on-failure. We
+      # invoke `npx playwright test` directly rather than `npm run e2e`, which
+      # would redundantly rebuild the client; the browser itself must be
+      # installed here since the runner image ships none — `--with-deps` pulls
+      # the system libraries Chromium needs, budgeted generously.
+      - name: Playwright e2e
+        timeout-minutes: 15
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+
       - name: Build Docker image
         run: docker build -t bank:ci .
