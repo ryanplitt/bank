@@ -451,3 +451,80 @@ describe('hardening: malformed input leaves the server up and the game consisten
     expect(victimReceivedState).toBe(false);
   });
 });
+
+describe('spectators', () => {
+  it('watches a live game without a session, and cannot bank', async () => {
+    const host = connect();
+    await host.once('connect');
+    host.emit(C2S.CREATE_GAME, { name: 'Host' });
+    const hostSession = await host.once(S2C.SESSION);
+    const code = hostSession.code;
+
+    const p2 = connect();
+    await p2.once('connect');
+    p2.emit(C2S.JOIN_GAME, { name: 'Brie', code });
+    await p2.once(S2C.SESSION);
+    await host.waitFor((s) => s.players.length === 2, 'two seated');
+
+    host.emit(C2S.START_GAME, {});
+    await host.waitFor((s) => s.phase === 'playing', 'game started');
+    host.emit(C2S.FORCE_ROLL, {});
+    await host.waitFor((s) => s.pot > 0, 'pot grew');
+
+    // A fresh socket with no name asks to watch. No session should be issued.
+    const watcher = connect();
+    await watcher.once('connect');
+    watcher.emit(C2S.WATCH_GAME, { code });
+    const wState = await watcher.once(S2C.STATE);
+    expect(wState.phase).toBe('playing');
+    expect(wState.players.map((p) => p.name).sort()).toEqual(['Brie', 'Host']);
+    expect(wState.spectatorCount).toBe(1);
+
+    // The recent narration is replayed to the late-arriving watcher ...
+    await new Promise((r) => setTimeout(r, 50));
+    expect(watcher.feed.length).toBeGreaterThanOrEqual(2); // gameStarted + the roll
+    // ... and the watcher never receives a session.
+    const noSession = await Promise.race([
+      watcher.once(S2C.SESSION),
+      new Promise((resolve) => setTimeout(() => resolve('none'), 400)),
+    ]);
+    expect(noSession).toBe('none');
+
+    // The read-only role is enforced server-side: banking is rejected.
+    watcher.emit(C2S.BANK);
+    await watcher.waitError('NOT_IN_GAME');
+
+    // Watchers hold no roster seat: the table is unchanged for the players.
+    const room = manager.get(code);
+    expect(room.size).toBe(2);
+
+    // Leaving unseats them and drops the count, without touching the game.
+    watcher.emit(C2S.LEAVE_GAME);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(room.spectatorCount).toBe(0);
+    expect(room.size).toBe(2);
+    expect(watcher.socket, 'socket detached').toBeTruthy();
+  });
+
+  it('unseats a watcher when their socket drops', async () => {
+    const host = connect();
+    await host.once('connect');
+    host.emit(C2S.CREATE_GAME, { name: 'Host' });
+    const hostSession = await host.once(S2C.SESSION);
+    const code = hostSession.code;
+
+    const watcher = connect();
+    await watcher.once('connect');
+    watcher.emit(C2S.WATCH_GAME, { code });
+    const room = manager.get(code);
+    await watcher.once(S2C.STATE);
+    expect(room.spectatorCount).toBe(1);
+
+    watcher.socket.close();
+    await new Promise((r) => setTimeout(r, 50));
+    // The disconnect unseats them; the player roster is untouched.
+    expect(room.spectatorCount).toBe(0);
+    expect(room.size).toBe(1); // the host alone
+    expect(room.players.get(hostSession.playerId).connected).toBe(true);
+  });
+});

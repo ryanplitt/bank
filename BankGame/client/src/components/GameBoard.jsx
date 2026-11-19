@@ -18,7 +18,7 @@ import Pot from './Pot.jsx';
  * dashboard and the "start next round" action. On desktop (the host's shared
  * screen, or anyone) the same view lays out into a roomier dashboard grid.
  */
-export default function GameBoard({ state, me, isHost, canBank, feed, bank, host }) {
+export default function GameBoard({ state, me, isHost, canBank, feed, bank, host, isSpectator = false }) {
   const { round, rules, pot, lastRoll, nextRollAt, players, phase } = state;
   const roundOver = phase === 'roundOver';
   const busted = roundOver && state.lastRoundResult?.reason === 'busted';
@@ -39,7 +39,15 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
   }
 
   return (
-    <div className="board">
+    <div className={`board ${isSpectator ? 'is-spectator' : ''}`}>
+      {isSpectator && (
+        <div className="spectator-banner">
+          <span className="spectator-title">You&apos;re watching 📡</span>
+          <span className="spectator-meta">
+            {state.spectatorCount - 1} other watcher{state.spectatorCount - 1 === 1 ? '' : 's'} · read-only · the scoreboard below is live
+          </span>
+        </div>
+      )}
       <header className="board-head">
         <RoundProgress round={round} total={rules.rounds} phase={phase} />
         {state.paused && <div className="paused-chip">⏸ paused</div>}
@@ -61,7 +69,16 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
             <Countdown nextRollAt={nextRollAt} totalMs={rules.rollIntervalSeconds * 1000} />
           )}
 
-          <BankButton canBank={canBank} pot={pot} onClick={bank} />
+          {/* A spectator's BANK button exists only to say "not for you": muted,
+              disabled on purpose, explicit that the countdown keeps rolling
+              without them. */}
+          <BankButton
+            disabled={isSpectator}
+            canBank={isSpectator ? false : canBank}
+            pot={pot}
+            hint={isSpectator ? 'read-only for spectators' : undefined}
+            onClick={bank}
+          />
         </div>
       )}
 

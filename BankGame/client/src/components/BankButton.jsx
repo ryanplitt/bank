@@ -2,7 +2,7 @@
  * The one thing players spend the game doing: BANK. Large and thumb-reachable,
  * with the amount on the line right on the button so there is no second-guessing.
  */
-export default function BankButton({ canBank, pot, disabled, onClick }) {
+export default function BankButton({ canBank, pot, disabled, hint, onClick }) {
   const blocked = disabled || !canBank;
   return (
     <button
@@ -12,7 +12,7 @@ export default function BankButton({ canBank, pot, disabled, onClick }) {
       onClick={onClick}
     >
       <span className="bank-main">BANK</span>
-      <span className="bank-sub">{blocked ? 'waiting…' : `take the pot · ${pot}`}</span>
+      <span className="bank-sub">{blocked ? hint || 'waiting…' : `take the pot · ${pot}`}</span>
     </button>
   );
 }

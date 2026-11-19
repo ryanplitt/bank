@@ -11,7 +11,7 @@ import { loadIdentity, clearIdentity } from '../session.js';
  *   that disconnected for any reason), we offer to resume in place rather than
  *   re-joining as a fresh player.
  */
-export default function JoinScreen({ connected, create, join, resume }) {
+export default function JoinScreen({ connected, create, join, resume, watch }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,6 +46,15 @@ export default function JoinScreen({ connected, create, join, resume }) {
     } else {
       join(name.trim(), norm);
     }
+  }
+
+  function doWatch(e) {
+    e.preventDefault();
+    const norm = code.trim().toUpperCase();
+    if (!norm) return;
+    setBusy(true);
+    // No name, no seat, no session — just ride the room's broadcast read-only.
+    watch(norm);
   }
 
   function doResume() {
@@ -109,10 +118,22 @@ export default function JoinScreen({ connected, create, join, resume }) {
             <button type="submit" className="big-action" disabled={busy} onClick={doJoin}>
               Join room
             </button>
-            <button type="button" className="secondary" disabled={busy} onClick={doCreate}>
+            <button type="submit" className="secondary" disabled={busy} onClick={doCreate}>
               Host a new room
             </button>
           </div>
+
+          {code.trim() && (
+            <button
+              type="button"
+              className="watch-action"
+              disabled={busy}
+              onClick={(e) => doWatch(e)}
+              title="Open the room link read-only — no seat taken, nothing to fill in"
+            >
+              👁 Watch a game
+            </button>
+          )}
         </form>
       )}
 

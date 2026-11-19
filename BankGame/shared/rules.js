@@ -8,6 +8,9 @@
 
 export const MAX_PLAYERS = 12;
 export const MIN_PLAYERS = 2;
+/** Soft cap on read-only watchers attached to one room. A plain integer on
+ *  the room; it never counts against the player cap. */
+export const MAX_SPECTATORS = 40;
 export const MAX_NAME_LENGTH = 20;
 export const GAME_CODE_LENGTH = 6;
 

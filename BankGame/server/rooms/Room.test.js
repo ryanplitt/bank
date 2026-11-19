@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { MAX_SPECTATORS } from '@bank/shared';
 import { Room } from './Room.js';
 import { RoomManager } from './RoomManager.js';
 
@@ -262,6 +263,53 @@ describe('room emptiness', () => {
     room.kick('host');
     expect(room.players.size).toBe(0);
     expect(room.emptySince).not.toBeNull();
+  });
+});
+
+describe('spectators', () => {
+  it('seats and unseats watchers, keeping the count exact', () => {
+    const { room } = makeRoom();
+    expect(room.spectatorCount).toBe(0);
+    expect(room.addSpectator()).toMatchObject({ ok: true });
+    expect(room.spectatorCount).toBe(1);
+    expect(room.addSpectator()).toMatchObject({ ok: true });
+    expect(room.spectatorCount).toBe(2);
+    expect(room.removeSpectator()).toMatchObject({ ok: true });
+    expect(room.spectatorCount).toBe(1);
+    expect(room.removeSpectator()).toMatchObject({ ok: true });
+    expect(room.spectatorCount).toBe(0);
+  });
+
+  it('rejects a watch once the cap is reached, and the count never exceeds it', () => {
+    const { room } = makeRoom();
+    for (let i = 0; i < MAX_SPECTATORS; i += 1) {
+      expect(room.addSpectator().ok).toBe(true);
+    }
+    expect(room.spectatorCount).toBe(MAX_SPECTATORS);
+    expect(room.addSpectator().ok).toBe(false);
+    expect(room.spectatorCount).toBe(MAX_SPECTATORS); // clamped, not overshot
+  });
+
+  it('never lets the count drop below zero', () => {
+    const { room } = makeRoom();
+    expect(room.removeSpectator().ok).toBe(false);
+    expect(room.spectatorCount).toBe(0);
+  });
+
+  it('exposes the count in public state but keeps watchers out of the roster', () => {
+    const { room } = makeRoom();
+    room.addSpectator();
+    room.addSpectator();
+    const pub = room.publicState();
+    expect(pub.spectatorCount).toBe(2);
+    expect(pub.players.map((p) => p.id)).toEqual(['host']); // no roster entry
+  });
+
+  it('still counts a room empty without its players, even with watchers attached', () => {
+    const { room } = makeRoom();
+    room.addSpectator();
+    room.markDisconnected('host');
+    expect(room.emptySince).not.toBeNull(); // spectators are not presence
   });
 });
 

@@ -189,6 +189,38 @@ button:disabled {
   margin-top: 12px;
 }
 
+/* Compact read-only option: sits under the join/create actions, full-width. */
+.watch-action {
+  width: 100%;
+  margin-top: 8px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--muted);
+  padding: 12px;
+  font-size: 0.95rem;
+}
+
+/* Read-only chrome for someone riding a room's broadcast. */
+.spectator-banner {
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  text-align: center;
+  display: grid;
+  gap: 2px;
+}
+
+.spectator-title {
+  font-weight: 700;
+}
+
+.spectator-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .resume-card {
   background: var(--panel);
   border: 1px solid var(--line);

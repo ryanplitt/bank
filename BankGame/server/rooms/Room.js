@@ -15,7 +15,7 @@
  * keeps this module fully unit-testable.
  */
 
-import { FEED_KIND, MAX_PLAYERS, S2C } from '@bank/shared';
+import { FEED_KIND, MAX_PLAYERS, MAX_SPECTATORS, S2C } from '@bank/shared';
 import {
   addPlayer,
   adjustScore,
@@ -83,6 +83,10 @@ export class Room {
     this.hostGraceMs = opts.hostGraceMs || 15_000;
     /** One-shot timer that transfers the host after a too-long absence. */
     this.hostGraceTimer = null;
+    /** Read-only watchers on the broadcast, beyond the player cap. A plain
+     *  integer by design: no roster entries, no presence, and `emptySince`
+     *  deliberately still only counts players. */
+    this.spectatorCount = 0;
   }
 
   /* ------------------------------------------------------------ *
@@ -144,6 +148,33 @@ export class Room {
   /** A socket left the room's socket group (not necessarily the game). */
   detachSocket() {
     this.touch();
+  }
+
+  /* ------------------------------------------------------------ *
+   * Spectators (read-only watchers on the broadcast)
+   * ------------------------------------------------------------ */
+
+  /**
+   * Seat one more watcher on the broadcast channel. Only a count is kept —
+   * no roster entry, no engine player, no presence — so a watcher can never
+   * affect the game. Returns `{ ok: false }` at MAX_SPECTATORS.
+   */
+  addSpectator() {
+    if (this.spectatorCount >= MAX_SPECTATORS) {
+      return { ok: false, reason: 'spectator cap reached' };
+    }
+    this.spectatorCount += 1;
+    this.touch();
+    return { ok: true };
+  }
+
+  /** Unseat a watcher. Guards at the floor so a stray disconnect can never
+   *  drive the count negative. */
+  removeSpectator() {
+    if (this.spectatorCount <= 0) return { ok: false, reason: 'no spectators' };
+    this.spectatorCount -= 1;
+    this.touch();
+    return { ok: true };
   }
 
   /* ------------------------------------------------------------ *
@@ -523,6 +554,7 @@ export class Room {
       paused: this.paused,
       canStart: this.canStart(),
       canStartRound: this.state.phase === PHASE.ROUND_OVER,
+      spectatorCount: this.spectatorCount,
     };
   }
 

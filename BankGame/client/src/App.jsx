@@ -15,10 +15,14 @@ export default function App() {
     connect();
   }, [connect]);
 
-  // A connected + session + state means we're in a game; otherwise show Join.
-  // We wait for a state snapshot before deciding, so a resume that's in flight
-  // doesn't flash the join screen.
-  const inGame = Boolean(session && state);
+  // A connected state snapshot means we're in — as a seated player (session)
+  // or a read-only spectator (watching). Either way we wait for the snapshot
+  // before rendering so an in-flight resume doesn't flash the join screen.
+  const inGame = Boolean(state && (session || game.watching));
+  // Spectators always get the board (in any phase — the countdown and rounds
+  // are the show) with their read-only chrome; they never see the lobby
+  // controls or get a roster entry.
+  const isSpectator = inGame && !session && game.watching;
 
   return (
     <div className="app">
@@ -38,6 +42,18 @@ export default function App() {
           create={game.create}
           join={game.join}
           resume={game.resume}
+          watch={game.watch}
+        />
+      ) : isSpectator ? (
+        <GameBoard
+          state={state}
+          me={me}
+          isHost={false}
+          isSpectator
+          canBank={false}
+          feed={game.feed}
+          bank={game.bank}
+          host={game.host}
         />
       ) : state.phase === 'lobby' ? (
         <Lobby

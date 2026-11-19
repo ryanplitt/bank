@@ -21,6 +21,9 @@ export function useGame() {
   const [feed, setFeed] = useState([]);
   const [lastError, setLastError] = useState(null);
   const [connected, setConnected] = useState(socket.connected);
+  // The room code we attached to as a read-only watcher (no session). A
+  // session standing up (create/join/resume) supersedes it.
+  const [watchingCode, setWatchingCode] = useState(null);
   const stateRef = useRef(null);
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export function useGame() {
     };
     const onSession = (payload) => {
       setSession(payload);
+      setWatchingCode(null); // seated: no longer a watcher
       if (payload.key === 'create' || payload.key === 'join') {
         saveIdentity(payload.code, payload.playerId, payload.token);
       }
@@ -41,6 +45,7 @@ export function useGame() {
     const onRemoved = () => {
       // Kicked or the room closed: drop the local session so the next visit is clean.
       setSession(null);
+      setWatchingCode(null);
       if (stateRef.current) clearIdentity(stateRef.current.code);
       setState(null);
     };
@@ -74,6 +79,9 @@ export function useGame() {
   const myId = session ? session.playerId : null;
   const me = state ? (state.players || []).find((p) => p.id === myId) || null : null;
   const isHost = Boolean(me && me.host);
+  /** True while attached to a room as a read-only spectator (no session). A
+   *  STATE snapshot with the watched code bumps this on. */
+  const watching = Boolean(watchingCode) && Boolean(state);
   const canBank =
     Boolean(state && me && myId && state.phase === 'playing' && me.inRound && state.pot > 0) &&
     Boolean(socket.connected);
@@ -84,6 +92,12 @@ export function useGame() {
   const join = useCallback((name, code) => socket.emit(C2S.JOIN_GAME, { name, code }), []);
   const resume = useCallback((code, playerId, token) =>
     socket.emit(C2S.RESUME, { code, playerId, token }), []);
+  /** Attach read-only: no name, no session, no seat — just the broadcast. */
+  const watch = useCallback((code) => {
+    setWatchingCode(code);
+    setLastError(null);
+    socket.emit(C2S.WATCH_GAME, { code });
+  }, []);
 
   const bank = useCallback(() => socket.emit(C2S.BANK), []);
 
@@ -106,12 +120,14 @@ export function useGame() {
     myId,
     me,
     isHost,
+    watching,
     canBank,
     connect,
     dismissError,
     create,
     join,
     resume,
+    watch,
     bank,
     host,
   };
