@@ -265,6 +265,70 @@ button:disabled {
   text-align: center;
 }
 
+/* ---------------- QR invite ----------------
+   The host's big screen doubles as the invitation: guests scan a QR instead
+   of typing the 6-char code. Deliberately hidden below 600px — phone lobbies
+   are served by the copy-share-link field, and a cramped code helps nobody. */
+
+.qr-invite {
+  display: none;
+}
+
+@media (min-width: 600px) {
+  .qr-invite {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  .qr-invite[data-qr-invite='fallback'] {
+    justify-content: space-between;
+  }
+
+  .qr-invite-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 150px;
+  }
+
+  .qr-invite-label {
+    font-weight: 600;
+  }
+
+  .qr-invite-caption {
+    color: var(--accent);
+    font-size: 0.8rem;
+  }
+
+  .qr-canvas {
+    flex: 0 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    padding: 5px;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  /* Space reserved while the lazy QR encode runs, so the lobby doesn't jump. */
+  .qr-skeleton {
+    width: 200px;
+    height: 200px;
+    background: var(--panel-2);
+    border-radius: 12px;
+  }
+
+  .qr-invite-fallback {
+    color: var(--muted);
+    flex: 1 1 auto;
+    word-break: break-all;
+  }
+}
+
 /* ---------------- scoreboard ---------------- */
 
 .row {
