@@ -27,6 +27,8 @@ export default [
       '**/vite.config.js',
       'eslint.config.js',
       'vitest.config.js',
+      // Root-level diagnostic probe; runs under plain Node.
+      'srvprobe.mjs',
     ],
     languageOptions: { globals: { ...globals.node } },
   },
