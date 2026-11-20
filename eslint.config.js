@@ -27,8 +27,10 @@ export default [
       '**/vite.config.js',
       'eslint.config.js',
       'vitest.config.js',
-      // Root-level diagnostic probe; runs under plain Node.
+      // Root-level diagnostic probe and the dependency-free PWA icon
+      // generator; both run under plain Node.
       'srvprobe.mjs',
+      'scripts/**/*.mjs',
     ],
     languageOptions: { globals: { ...globals.node } },
   },

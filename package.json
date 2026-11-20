@@ -23,6 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "npm run build && playwright test",
+    "icons": "node scripts/gen-pwa-icons.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
