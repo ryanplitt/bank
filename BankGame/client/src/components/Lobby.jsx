@@ -1,5 +1,6 @@
 import Scoreboard from './Scoreboard.jsx';
 import HostPanel from './HostPanel.jsx';
+import QrInvite from './QrInvite.jsx';
 import { C2S, describeRules } from '@bank/shared';
 
 /** Pre-game lobby: show who's here, the rules, a share link, and a start. */
@@ -26,6 +27,9 @@ export default function Lobby({ state, me, isHost, connected, feed, host }) {
         <p className="share-field" onClick={copyLink} title="Click to copy">
           {shareUrl}
         </p>
+        {/* The host's big screen doubles as the invitation: scanning beats
+            typing. Phones don't get this block (see styles.css). */}
+        {isHost && <QrInvite url={shareUrl} />}
       </header>
 
       <div className="panel">

@@ -1,0 +1,14 @@
+{
+  "name": "Bank",
+  "short_name": "Bank",
+  "description": "Multiplayer push-your-luck dice game — one host leads, everyone joins from their own phone.",
+  "icons": [
+    { "src": "/icons/app-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/app-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "theme_color": "#10141c",
+  "background_color": "#10141c",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/"
+}

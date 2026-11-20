@@ -49,6 +49,11 @@ async function createHost(page) {
   await page.getByRole('button', { name: /Host a new room/ }).click();
   // The lobby shows the room code in the header once the session + state land.
   await page.waitForSelector('.lobby-head h2', { timeout: WAIT });
+  // The host's lobby doubles as the invitation: the QR (lazy-loaded and
+  // asynchronously encoded) must reach "ready" rather than its fallback.
+  await expect(page.locator('.qr-invite')).toHaveAttribute('data-qr-invite', 'ready', {
+    timeout: WAIT,
+  });
   const code = (await page.locator('.lobby-head h2').innerText()).replace('Room ', '').trim();
   return code;
 }
@@ -60,6 +65,17 @@ async function joinGame(page, name, code) {
   await page.getByRole('button', { name: /Join room/ }).click();
   await page.waitForSelector('.lobby-head h2', { timeout: WAIT });
 }
+
+test('the PWA install sheet is served: manifest and icons', async () => {
+  const manifest = await (await fetch(`${BASE}/manifest.json`)).json();
+  expect(manifest.display).toBe('standalone');
+  expect(manifest.icons.map((i) => i.sizes).sort()).toEqual(['192x192', '512x512']);
+  for (const size of ['192', '512']) {
+    const res = await fetch(`${BASE}/icons/app-icon-${size}.png`);
+    expect(res.ok).toBe(true);
+    expect(res.headers.get('content-type')).toBe('image/png');
+  }
+});
 
 test('create → join → start → play → bank → next round → end', async ({ browser }) => {
   const host = await browser.newContext();
@@ -97,6 +113,10 @@ test('create → join → start → play → bank → next round → end', async
     const el = document.querySelector('.pot-value');
     return el && Number(el.textContent) > 0;
   }, undefined, { timeout: WAIT });
+
+  // Pot history is derived from the roll feed — it must be on screen once the
+  // first roll has landed.
+  await expect(hostPage.locator('.pot-history')).toHaveCount(1);
 
   const clickBank = (page) =>
     page.waitForFunction(() => {
