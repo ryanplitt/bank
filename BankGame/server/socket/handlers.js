@@ -101,6 +101,7 @@ export function registerHandlers(io, deps = {}) {
     socket.on(C2S.JOIN_GAME, wrap((p) => onJoin(socket, p)));
     socket.on(C2S.RESUME, wrap((p) => onResume(socket, p)));
     socket.on(C2S.LEAVE_GAME, wrap(() => onLeave(socket)));
+    socket.on(C2S.WATCH_GAME, wrap((p) => onWatch(socket, p)));
     socket.on(C2S.BANK, wrap(() => onBank(socket)));
 
     for (const [event, handler] of [
@@ -161,7 +162,11 @@ export function registerHandlers(io, deps = {}) {
     const room = ctx.room;
     room.socketIds.delete(socket.id);
     socket.leave(code);
-    room.markDisconnected(ctx.playerId);
+    if (ctx.spectating) {
+      room.removeSpectator();
+    } else {
+      room.markDisconnected(ctx.playerId);
+    }
     // Deliberately not dropped here: the roster outlives a disconnect so a
     // refresh can resume with score and host intact, so it is never empty at
     // this point. The manager's sweeper reclaims the room once nobody has been
@@ -249,11 +254,62 @@ export function registerHandlers(io, deps = {}) {
     if (!ctx) return;
     ctx.room.socketIds.delete(socket.id);
     socket.leave(ctx.code);
-    // Marking the player disconnected (even though this socket stays open) lets
-    // a departing host stop being host after the grace period, and shows them
-    // greyed-out to the rest of the table.
-    ctx.room.markDisconnected(ctx.playerId);
+    if (ctx.spectating) {
+      // Watchers hold no roster entry — unseat them and drop the count.
+      ctx.room.removeSpectator();
+    } else {
+      // Marking the player disconnected (even though this socket stays open)
+      // lets a departing host stop being host after the grace period, and shows
+      // them greyed-out to the rest of the table.
+      ctx.room.markDisconnected(ctx.playerId);
+    }
     socket.data.game = null;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Spectators
+   * ------------------------------------------------------------------ */
+
+  /** How much of the narration feed a freshly-arriving watcher catches up on. */
+  const SPECTATOR_FEED_REPLAY = 40;
+
+  /** Hand a watcher the current snapshot plus recent history. */
+  function resendWatch(socket, room) {
+    socket.emit(S2C.STATE, room.publicState());
+    for (const f of [...room.feed].slice(-SPECTATOR_FEED_REPLAY)) {
+      socket.emit(S2C.FEED, f);
+    }
+  }
+
+  /** Attach as a read-only watcher: the code, a seat in the broadcast channel,
+   *  and a distinct `spectating` ctx — no player id, so bank/host logic below
+   *  has nothing to authorize against. No session is issued for watchers. */
+  function onWatch(socket, payload) {
+    const code = normalizeCode(payload?.code);
+    if (!code) return sendError(socket, ERROR_CODES.INVALID_CODE, 'enter that code');
+    const room = manager.get(code);
+    if (!room) return sendError(socket, ERROR_CODES.NO_SUCH_GAME, 'no game with that code');
+
+    // A seated player watching their own game would orphan their roster entry
+    // (their presence would never be cleared), so refuse a role switch.
+    if (socket.data.game?.playerId) {
+      return sendError(socket, ERROR_CODES.NOT_IN_GAME, 'you are already seated in a game');
+    }
+    // Re-watch (e.g. a refresh in flight): no double-count, just refresh the
+    // snapshot and feed.
+    if (socket.data.game?.spectating && socket.data.game.code === code) {
+      return resendWatch(socket, room);
+    }
+
+    const joined = room.addSpectator();
+    if (!joined.ok) {
+      return sendError(socket, ERROR_CODES.SERVER_BUSY, 'that game has too many watchers');
+    }
+    socket.join(code);
+    room.socketIds.add(socket.id);
+    socket.data.game = { code, spectating: true, room };
+    resendWatch(socket, room);
+    logger.info({ event: 'spectator_joined', code });
   }
 
   /* ------------------------------------------------------------------ *
@@ -263,6 +319,11 @@ export function registerHandlers(io, deps = {}) {
   function onBank(socket) {
     const ctx = socket.data.game;
     if (!ctx) return sendError(socket, ERROR_CODES.NOT_IN_GAME, 'you are not in a game');
+    // Watchers carry a spectating ctx with no player id: they ride the
+    // broadcast but may never play, whatever their (muted) button says.
+    if (ctx.spectating) {
+      return sendError(socket, ERROR_CODES.NOT_IN_GAME, 'spectators cannot bank');
+    }
     const room = manager.get(ctx.code);
     if (!room) return sendError(socket, ERROR_CODES.NO_SUCH_GAME, 'room no longer exists');
     const res = room.bankPlayer(ctx.playerId);

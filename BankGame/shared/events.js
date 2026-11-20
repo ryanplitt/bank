@@ -11,6 +11,8 @@ export const C2S = {
   JOIN_GAME: 'game:join',
   RESUME: 'game:resume',
   LEAVE_GAME: 'game:leave',
+  /** No seat — join the room's broadcast to watch the game read-only. */
+  WATCH_GAME: 'game:watch',
 
   BANK: 'play:bank',
 
