@@ -26,7 +26,9 @@ async function startServer() {
     transports: ['websocket'],
   });
   manager = new RoomManager();
-  registerHandlers(io, { manager, hostGraceMs: 50 });
+  // Every test client shares 127.0.0.1, so lift the per-address room cap here;
+  // the cap itself has a dedicated test below with its own server.
+  registerHandlers(io, { manager, hostGraceMs: 50, maxRoomsPerIp: 1000 });
   await new Promise((resolve) => server.listen(0, resolve));
   port = server.address().port;
 }
@@ -526,5 +528,217 @@ describe('spectators', () => {
     expect(room.spectatorCount).toBe(0);
     expect(room.size).toBe(1); // the host alone
     expect(room.players.get(hostSession.playerId).connected).toBe(true);
+  });
+});
+
+
+/* ------------------------------------------------------------------ *
+ * Regression tests for the socket-lifecycle review fixes
+ * ------------------------------------------------------------------ */
+
+const settle = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+
+async function createRoom(name = 'Host') {
+  const c = connect();
+  await c.once('connect');
+  const sessionP = c.once(S2C.SESSION);
+  c.emit(C2S.CREATE_GAME, { name });
+  const session = await sessionP;
+  return { c, session, code: session.code, room: manager.get(session.code) };
+}
+
+describe('one seat per socket', () => {
+  it('refuses a second create from a seated socket instead of orphaning a room', async () => {
+    const { c } = await createRoom();
+    const before = manager.size;
+    for (let i = 0; i < 5; i += 1) c.emit(C2S.CREATE_GAME, { name: 'Again' });
+    await c.waitError('ALREADY_IN_GAME');
+    await settle();
+    expect(manager.size).toBe(before);
+  });
+
+  it('refuses a seated socket joining or watching another room', async () => {
+    const a = await createRoom('A');
+    const b = await createRoom('B');
+    a.c.emit(C2S.JOIN_GAME, { name: 'A2', code: b.code });
+    await a.c.waitError('ALREADY_IN_GAME');
+    a.c.emit(C2S.WATCH_GAME, { code: b.code });
+    await a.c.waitError('NOT_IN_GAME');
+    expect(b.room.size).toBe(1);
+  });
+
+  it('a duplicate resume on the same seat is idempotent', async () => {
+    const { c, session, room } = await createRoom();
+    const again = c.once(S2C.SESSION);
+    c.emit(C2S.RESUME, { code: session.code, playerId: session.playerId, token: session.token });
+    await again;
+    expect(room.socketIds.size).toBe(1);
+    expect(room.players.get(session.playerId).connected).toBe(true);
+  });
+
+  it('a watcher who takes a seat stops counting as a watcher', async () => {
+    const host = await createRoom();
+    const w = connect();
+    await w.once('connect');
+    w.emit(C2S.WATCH_GAME, { code: host.code });
+    await w.once(S2C.STATE);
+    expect(host.room.spectatorCount).toBe(1);
+
+    w.emit(C2S.JOIN_GAME, { name: 'Pat', code: host.code });
+    await w.once(S2C.SESSION);
+    await settle();
+    expect(host.room.spectatorCount).toBe(0);
+    expect(host.room.size).toBe(2);
+
+    w.socket.close();
+    await settle();
+    expect(host.room.spectatorCount).toBe(0); // no stranded count after the drop
+  });
+
+  it('a watcher who switches rooms leaves the old one completely', async () => {
+    const a = await createRoom('A');
+    const b = await createRoom('B');
+    const w = connect();
+    await w.once('connect');
+    w.emit(C2S.WATCH_GAME, { code: a.code });
+    await w.once(S2C.STATE);
+    w.emit(C2S.WATCH_GAME, { code: b.code });
+    await settle();
+    expect(a.room.spectatorCount).toBe(0);
+    expect(b.room.spectatorCount).toBe(1);
+
+    let heardA = false;
+    w.socket.on(S2C.STATE, (st) => {
+      if (st.code === a.code) heardA = true;
+    });
+    a.room.publish();
+    await settle();
+    expect(heardA).toBe(false);
+  });
+
+  it('a failed watch keeps the watcher on the room they already had', async () => {
+    const a = await createRoom('A');
+    const w = connect();
+    await w.once('connect');
+    w.emit(C2S.WATCH_GAME, { code: a.code });
+    await w.once(S2C.STATE);
+    w.emit(C2S.WATCH_GAME, { code: 'ZZZZZZ' });
+    await w.waitError('NO_SUCH_GAME');
+    expect(a.room.spectatorCount).toBe(1);
+  });
+
+  it('kicking a player leaves no stranded socket id behind', async () => {
+    const host = await createRoom();
+    const p = connect();
+    await p.once('connect');
+    p.emit(C2S.JOIN_GAME, { name: 'Pat', code: host.code });
+    const ps = await p.once(S2C.SESSION);
+    await host.c.waitFor((s) => s.players.length === 2, 'seated');
+    host.c.emit(C2S.KICK_PLAYER, { playerId: ps.playerId });
+    const removed = await new Promise((r) => p.socket.once(S2C.REMOVED, r));
+    expect(removed.reason).toBe('kicked');
+    p.socket.close();
+    await settle();
+    expect(host.room.socketIds.size).toBe(1);
+  });
+
+  it('the host cannot kick themself', async () => {
+    const host = await createRoom();
+    host.c.emit(C2S.KICK_PLAYER, { playerId: host.session.playerId });
+    await settle();
+    expect(host.room.size).toBe(1);
+  });
+});
+
+describe('closing rooms tells the people in them', () => {
+  it('an explicit leave in the lobby frees the seat, and the last one out closes the room', async () => {
+    const host = await createRoom();
+    const w = connect();
+    await w.once('connect');
+    w.emit(C2S.WATCH_GAME, { code: host.code });
+    await w.once(S2C.STATE);
+    const removedP = new Promise((r) => w.socket.once(S2C.REMOVED, r));
+
+    host.c.emit(C2S.LEAVE_GAME);
+    const removed = await removedP;
+    expect(removed.code).toBe(host.code);
+    expect(removed.reason).toBe('closed');
+    expect(manager.has(host.code)).toBe(false);
+  });
+
+  it('a swept room notifies a still-connected player and frees their socket', async () => {
+    const host = await createRoom();
+    const removedP = new Promise((r) => host.c.socket.once(S2C.REMOVED, r));
+    manager.close(host.code, host.room, 'abandoned');
+    const removed = await removedP;
+    expect(removed).toMatchObject({ code: host.code, reason: 'abandoned' });
+
+    // The socket is out of the old room's channel and can start fresh.
+    const next = host.c.once(S2C.SESSION);
+    host.c.emit(C2S.CREATE_GAME, { name: 'Host2' });
+    expect((await next).code).not.toBe(host.code);
+  });
+});
+
+describe('per-address limits', () => {
+  it('caps rooms per address and sockets per address', async () => {
+    const srv = http.createServer();
+    const sio = new Server(srv, { transports: ['websocket'] });
+    registerHandlers(sio, {
+      manager: new RoomManager(),
+      maxRoomsPerIp: 2,
+      maxSocketsPerIp: 3,
+    });
+    await new Promise((r) => srv.listen(0, r));
+    const url = `http://localhost:${srv.address().port}`;
+    const open = () => {
+      const s = ioc(url, { forceNew: true, transports: ['websocket'], reconnection: false });
+      clients.push(s);
+      return s;
+    };
+    try {
+      const socks = [open(), open(), open()];
+      await Promise.all(socks.map((s) => new Promise((r) => s.once('connect', r))));
+
+      // The fourth socket from this address is turned away at the handshake.
+      const fourth = open();
+      const rejected = await new Promise((r) => fourth.once('connect_error', r));
+      expect(rejected.message).toMatch(/too many connections/);
+
+      // Two rooms are fine; the third is refused.
+      const results = [];
+      for (const s of socks) {
+        s.on(S2C.ERROR, (e) => results.push(e.code));
+        s.emit(C2S.CREATE_GAME, { name: 'X' });
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      expect(results).toEqual(['SERVER_BUSY']);
+    } finally {
+      await new Promise((r) => sio.close(() => r()));
+    }
+  });
+});
+
+describe('reconnect: a new socket rebinds the seat', () => {
+  it('RESUME on a fresh socket restores broadcasts and the ability to act', async () => {
+    const host = await createRoom();
+    const p = connect();
+    await p.once('connect');
+    p.emit(C2S.JOIN_GAME, { name: 'Pat', code: host.code });
+    const ps = await p.once(S2C.SESSION);
+    await host.c.waitFor((s) => s.players.length === 2, 'seated');
+    host.c.emit(C2S.START_GAME, {});
+    await host.c.waitFor((s) => s.phase === 'playing', 'started');
+
+    p.socket.close(); // the phone locks
+    await host.c.waitFor((s) => s.players.some((x) => x.id === ps.playerId && !x.connected), 'ghosted');
+
+    const back = connect();
+    await back.once('connect');
+    back.emit(C2S.RESUME, { code: host.code, playerId: ps.playerId, token: ps.token });
+    const st = await back.once(S2C.STATE);
+    expect(st.players.find((x) => x.id === ps.playerId).connected).toBe(true);
+    host.c.emit(C2S.FORCE_ROLL, {});
+    await back.waitFor((s) => s.rollNumber >= 1, 'broadcast reaches the resumed socket');
   });
 });

@@ -44,6 +44,21 @@ export const ROOM_TTL_MS = 30 * 60 * 1000;
  */
 export const EMPTY_ROOM_TTL_MS = 2 * 60 * 1000;
 
+/**
+ * A lobby player whose socket dropped keeps their seat this long (so a refresh
+ * or a phone waking up resumes in place), then is removed. Without this a
+ * player who closed their tab would hold a slot and their name for the room's
+ * whole life.
+ */
+export const LOBBY_GHOST_MS = 30 * 1000;
+
+/**
+ * A returning player gets a fresh full roll window to react, but only once per
+ * this period per room. Otherwise anyone holding a token could reconnect in a
+ * loop and keep pushing the next auto-roll out forever.
+ */
+export const RESUME_GRACE_COOLDOWN_MS = 30 * 1000;
+
 export class Room {
   /**
    * @param {string} code The room code this instance is known by.
@@ -87,6 +102,17 @@ export class Room {
      *  integer by design: no roster entries, no presence, and `emptySince`
      *  deliberately still only counts players. */
     this.spectatorCount = 0;
+    /** playerId -> socket id of the one live socket seated as that player. */
+    this.socketByPlayer = new Map();
+    /** playerId -> timer that drops a disconnected lobby player. */
+    this.ghostTimers = new Map();
+    this.lobbyGhostMs = opts.lobbyGhostMs ?? LOBBY_GHOST_MS;
+    /** When a resume last bought a returning player a fresh roll window. */
+    this.lastResumeGraceAt = 0;
+    /** Network origin of the creator, for the per-address room cap. */
+    this.creatorIp = opts.creatorIp || null;
+    /** Set by destroy(): no timer may be (re)armed on a closed room. */
+    this.destroyed = false;
   }
 
   /* ------------------------------------------------------------ *
@@ -150,6 +176,12 @@ export class Room {
     this.touch();
   }
 
+  /** True while at least one seated player has a live connection. */
+  hasConnectedPlayers() {
+    for (const p of this.players.values()) if (p.connected) return true;
+    return false;
+  }
+
   /* ------------------------------------------------------------ *
    * Spectators (read-only watchers on the broadcast)
    * ------------------------------------------------------------ */
@@ -165,6 +197,7 @@ export class Room {
     }
     this.spectatorCount += 1;
     this.touch();
+    this.publish(); // the "N watching" count is part of the snapshot
     return { ok: true };
   }
 
@@ -174,6 +207,7 @@ export class Room {
     if (this.spectatorCount <= 0) return { ok: false, reason: 'no spectators' };
     this.spectatorCount -= 1;
     this.touch();
+    this.publish();
     return { ok: true };
   }
 
@@ -200,6 +234,8 @@ export class Room {
       this.players.get(playerId).name = name;
       this.players.get(playerId).connected = true;
     }
+    this.cancelGhost(playerId);
+    this.ensureHostPresent();
     this.publish();
     this.narrate({ kind: FEED_KIND.PLAYER_JOINED, name });
     return { ok: true, name };
@@ -207,10 +243,24 @@ export class Room {
 
   /** A player's socket reconnected mid-game. Name preserved; host preserved. */
   resume(playerId) {
-    if (!this.players.has(playerId)) return { ok: false, reason: 'unknown player' };
-    this.players.get(playerId).connected = true;
+    const entry = this.players.get(playerId);
+    if (!entry) return { ok: false, reason: 'unknown player' };
+    const wasConnected = entry.connected;
+    entry.connected = true;
+    this.cancelGhost(playerId);
     if (playerId === this.hostId) this.disarmHostGrace();
-    this.rescheduleClock();
+    // Someone else coming back while the host is still away re-arms the
+    // transfer: the original timer may have fired when nobody was connected to
+    // receive the role, and nothing else would ever retry it.
+    else this.ensureHostPresent();
+    // A genuine reconnect earns a fresh window to react — but not a plain
+    // repeat RESUME on a live seat, and not more than once per cooldown, or a
+    // reconnect loop could hold the next roll off indefinitely.
+    const now = Date.now();
+    if (!wasConnected && now - this.lastResumeGraceAt >= RESUME_GRACE_COOLDOWN_MS) {
+      this.lastResumeGraceAt = now;
+      this.rescheduleClock();
+    }
     this.publish();
     return { ok: true };
   }
@@ -220,8 +270,9 @@ export class Room {
    * intact so they can rejoin. Returns whether the room is now empty.
    */
   markDisconnected(playerId) {
+    if (this.destroyed) return true;
     const entry = this.players.get(playerId);
-    if (entry) {
+    if (entry && entry.connected) {
       entry.connected = false;
       this.publish();
       this.narrate({ kind: FEED_KIND.PLAYER_LEFT, name: entry.name });
@@ -229,18 +280,67 @@ export class Room {
       // quick refresh (reconnect) restores them as host; if they stay gone,
       // the role transfers to the next player so the table can continue.
       if (playerId === this.hostId) this.armHostGrace();
+      // In the lobby a vanished player is dropped after a short grace rather
+      // than squatting on a slot (and their name) for the room's lifetime.
+      if (this.state.phase === PHASE.LOBBY) this.scheduleGhost(playerId);
     }
     this.refreshEmptiness();
     this.touch();
     return this.players.size === 0;
   }
 
+  /** Drop `playerId` from the lobby if they are still gone after the grace. */
+  scheduleGhost(playerId) {
+    this.cancelGhost(playerId);
+    if (this.destroyed) return;
+    const timer = setTimeout(() => {
+      this.ghostTimers.delete(playerId);
+      const entry = this.players.get(playerId);
+      if (this.state.phase === PHASE.LOBBY && entry && !entry.connected) {
+        this.removeFromLobby(playerId);
+      }
+    }, this.lobbyGhostMs);
+    if (timer.unref) timer.unref();
+    this.ghostTimers.set(playerId, timer);
+  }
+
+  cancelGhost(playerId) {
+    const timer = this.ghostTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      this.ghostTimers.delete(playerId);
+    }
+  }
+
+  /**
+   * A player leaves the lobby for good (explicit leave, or a ghost timing out).
+   * Only meaningful before the game starts — mid-game the roster is the score
+   * sheet, so absent players stay on it.
+   */
+  removeFromLobby(playerId) {
+    if (this.state.phase !== PHASE.LOBBY) return { ok: false, reason: 'game already started' };
+    const entry = this.players.get(playerId);
+    if (!entry) return { ok: false, reason: 'unknown player' };
+    this.cancelGhost(playerId);
+    this.state = removePlayer(this.state, playerId);
+    this.players.delete(playerId);
+    this.socketByPlayer.delete(playerId);
+    this.refreshEmptiness();
+    this.reelectHostIfNeeded();
+    this.publish();
+    this.narrate({ kind: FEED_KIND.PLAYER_LEFT, name: entry.name });
+    this.touch();
+    return { ok: true, name: entry.name };
+  }
+
   /** Host removes a player from the roster entirely. */
   kick(playerId) {
     if (!this.players.has(playerId)) return { ok: false, reason: 'unknown player' };
     const name = this.players.get(playerId).name;
+    this.cancelGhost(playerId);
     this.state = removePlayer(this.state, playerId);
     this.players.delete(playerId);
+    this.socketByPlayer.delete(playerId);
     this.refreshEmptiness();
     this.publish();
     this.narrate({ kind: FEED_KIND.PLAYER_KICKED, name });
@@ -250,16 +350,37 @@ export class Room {
 
   /**
    * If the current host has left the roster entirely (e.g. kicked), promote
-   * the eldest remaining player. Returns whether a transfer happened.
+   * the eldest remaining player, preferring one who is actually connected.
+   * Returns whether a transfer happened.
    */
   reelectHostIfNeeded() {
     if (this.players.has(this.hostId) || this.players.size === 0) return false;
-    const next = this.oldestRemaining();
+    const next = this.nextHostCandidate();
     this.hostId = next.id;
-    const name = this.players.get(next.id).name;
     this.publish();
-    this.narrate({ kind: FEED_KIND.HOST_CHANGED, playerId: this.hostId, name });
+    this.narrate({ kind: FEED_KIND.HOST_CHANGED, playerId: this.hostId, name: next.name });
+    this.ensureHostPresent();
     return true;
+  }
+
+  /** Eldest connected player, else eldest of anyone; null on an empty roster. */
+  nextHostCandidate() {
+    let eldest = null;
+    for (const entry of this.players.values()) {
+      if (entry.connected) return entry;
+      eldest ??= entry;
+    }
+    return eldest;
+  }
+
+  /**
+   * If the host is away and no transfer is pending, start the grace countdown.
+   * Idempotent; called whenever anyone (re)connects or the host changes.
+   */
+  ensureHostPresent() {
+    if (this.destroyed || this.hostGraceTimer) return;
+    const host = this.players.get(this.hostId);
+    if (host && !host.connected) this.armHostGrace();
   }
 
   /**
@@ -283,6 +404,12 @@ export class Room {
     return null;
   }
 
+  /** Whether every seated player currently has a live connection. */
+  everyoneConnected() {
+    for (const p of this.players.values()) if (!p.connected) return false;
+    return true;
+  }
+
   /** Explicit host transfer to another player. */
   transferHost(playerId) {
     const entry = this.players.get(playerId);
@@ -299,7 +426,10 @@ export class Room {
       this.state.phase === PHASE.LOBBY &&
       this.players.size >= 2 &&
       this.players.size <= MAX_PLAYERS &&
-      Boolean(this.players?.get(this.hostId)?.connected)
+      Boolean(this.players?.get(this.hostId)?.connected) &&
+      // The lobby tells the host "everyone must be connected"; enforce it so a
+      // player who has just dropped is not silently dealt into a game.
+      this.everyoneConnected()
     );
   }
 
@@ -353,11 +483,15 @@ export class Room {
   start() {
     if (this.state.phase !== PHASE.LOBBY) return { ok: false, reason: 'game already started' };
     if (this.players.size < 2) return { ok: false, reason: 'need at least 2 players' };
+    if (!this.everyoneConnected()) {
+      return { ok: false, reason: 'everyone must be connected to start' };
+    }
     const result = startGame(this.state);
     this.state = result.state;
+    // Arm the clock *before* publishing so one snapshot carries the deadline.
+    this.scheduleNextRoll();
     this.publish();
     for (const e of result.events) this.narrate(e);
-    this.scheduleNextRoll();
     this.touch();
     return { ok: true };
   }
@@ -368,11 +502,11 @@ export class Room {
     this.clearRollTimer();
     const result = applyRoll(this.state, rollDice(this.rng));
     this.state = result.state;
-    this.publish();
-    for (const e of result.events) this.narrate(e);
     if (this.state.phase === PHASE.PLAYING) {
       this.scheduleNextRoll();
     }
+    this.publish();
+    for (const e of result.events) this.narrate(e);
     this.touch();
     return { ok: true, result };
   }
@@ -386,8 +520,6 @@ export class Room {
     if (this.state.pot <= 0) return { ok: false, reason: 'nothing in the pot' };
     const result = bank(this.state, playerId);
     this.state = result.state;
-    this.publish();
-    for (const e of result.events) this.narrate(e);
     if (this.state.phase === PHASE.PLAYING) {
       // By default banking does not reset the shared countdown — everyone races
       // the same deadline. Only when the host enables resetTimerOnBank do we
@@ -396,6 +528,8 @@ export class Room {
     } else {
       this.clearRollTimer();
     }
+    this.publish();
+    for (const e of result.events) this.narrate(e);
     this.touch();
     return { ok: true, result };
   }
@@ -407,13 +541,13 @@ export class Room {
     }
     const result = startNextRound(this.state);
     this.state = result.state;
-    this.publish();
-    for (const e of result.events) this.narrate(e);
     if (this.state.phase === PHASE.PLAYING) {
       this.scheduleNextRoll();
     } else {
       this.clearRollTimer();
     }
+    this.publish();
+    for (const e of result.events) this.narrate(e);
     this.touch();
     return { ok: true, result };
   }
@@ -434,9 +568,15 @@ export class Room {
     const keep = [...this.players.values()].map((p) => ({ id: p.id, name: p.name }));
     this.state = createGame();
     for (const k of keep) this.state = addPlayer(this.state, k.id);
-    this.hostId = this.oldestRemaining().id;
+    // Whoever is hosting stays host. Only fall back to a connected player if
+    // the host has somehow left the roster.
+    if (!this.players.has(this.hostId)) this.hostId = this.nextHostCandidate().id;
     this.clearRollTimer();
     this.paused = false;
+    // Back in the lobby: anyone who is gone starts the ghost countdown, and an
+    // absent host starts the transfer countdown.
+    for (const p of this.players.values()) if (!p.connected) this.scheduleGhost(p.id);
+    this.ensureHostPresent();
     this.publish();
     this.touch();
     return { ok: true };
@@ -472,7 +612,8 @@ export class Room {
     }, intervalMs);
     // Don't keep the process alive just because a game is mid-round.
     if (this.rollTimer.unref) this.rollTimer.unref();
-    this.publish();
+    // No publish here: every caller publishes right after changing state, so
+    // one snapshot carries both the new state and the new deadline.
   }
 
   clearRollTimer() {
@@ -490,15 +631,18 @@ export class Room {
 
   /** All done: stop the clock and silence broadcasts. */
   destroy() {
+    this.destroyed = true;
     this.clearRollTimer();
     this.disarmHostGrace();
+    for (const timer of this.ghostTimers.values()) clearTimeout(timer);
+    this.ghostTimers.clear();
     this.emitToRoom = () => {};
   }
 
   /** Start the countdown that transfers host to the next player if unclaimed. */
   armHostGrace() {
     this.disarmHostGrace();
-    if (this.players.size < 2) return; // nobody to promote to
+    if (this.destroyed || this.players.size < 2) return; // nobody to promote to
     this.hostGraceTimer = setTimeout(() => {
       this.hostGraceTimer = null;
       // Only transfer if the host is still gone.
@@ -555,6 +699,10 @@ export class Room {
       canStart: this.canStart(),
       canStartRound: this.state.phase === PHASE.ROUND_OVER,
       spectatorCount: this.spectatorCount,
+      /** Server clock at send time. `nextRollAt` is an absolute server epoch,
+       *  so clients subtract their offset from this to count down correctly
+       *  even when their own clock is wrong. */
+      serverNow: Date.now(),
     };
   }
 

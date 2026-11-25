@@ -11,7 +11,7 @@ import { loadIdentity, clearIdentity } from '../session.js';
  *   that disconnected for any reason), we offer to resume in place rather than
  *   re-joining as a fresh player.
  */
-export default function JoinScreen({ connected, create, join, resume, watch }) {
+export default function JoinScreen({ connected, create, join, resume, watch, error = null }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,6 +24,14 @@ export default function JoinScreen({ connected, create, join, resume, watch }) {
   useEffect(() => {
     setCode(guessCodeFromLocation());
   }, []);
+
+  // Every action locks the form while it is in flight. A failed one (wrong
+  // code, name taken, game full, expired session…) answers with an error and
+  // never reaches a state change, so unlock here or the screen stays stuck on
+  // "One moment…" until a refresh.
+  useEffect(() => {
+    if (error) setBusy(false);
+  }, [error]);
 
   const resumeAvailable = code && loadIdentity(code);
 

@@ -24,6 +24,13 @@ export class RoomManager {
     this.rooms = new Map();
     /** Total created — used to cap the room count if ever needed. */
     this.createdCount = 0;
+    /**
+     * Called as `(room, reason)` after a room is closed — reason is 'closed'
+     * (explicit delete), 'idle' or 'abandoned' (swept). The socket layer uses
+     * it to tell anyone still attached, so a reaped room never leaves clients
+     * staring at a dead board.
+     */
+    this.onClose = options.onClose || null;
   }
 
   /** Create (or return the existing) room for a code, recording the host. */
@@ -49,9 +56,21 @@ export class RoomManager {
   delete(code) {
     const room = this.rooms.get(code);
     if (!room) return false;
+    this.close(code, room, 'closed');
+    return true;
+  }
+
+  /** Destroy, unregister and announce a room. */
+  close(code, room, reason) {
     room.destroy();
     this.rooms.delete(code);
-    return true;
+    if (this.onClose) {
+      try {
+        this.onClose(room, reason);
+      } catch {
+        // A failing notifier must never stop the sweep.
+      }
+    }
   }
 
   /** Total number of live rooms. */
@@ -62,17 +81,20 @@ export class RoomManager {
   /**
    * Sweep rooms that are idle (> ttlMs since any activity) or abandoned
    * (> emptyTtlMs with nobody connected). Returns the codes reaped.
+   *
+   * "Idle" only applies to a room nobody is connected to: a lobby full of
+   * people waiting for a late friend, or a paused game, sends no events but is
+   * very much alive, and reaping it out from under them is a bug, not tidiness.
    */
   sweepOnce() {
     const now = Date.now();
     const reaped = [];
     for (const [code, room] of this.rooms) {
-      const idle = now - room.lastActiveAt > this.ttlMs;
+      const idle = now - room.lastActiveAt > this.ttlMs && !room.hasConnectedPlayers();
       const abandoned =
         room.emptySince !== null && now - room.emptySince > this.emptyTtlMs;
       if (idle || abandoned) {
-        room.destroy();
-        this.rooms.delete(code);
+        this.close(code, room, abandoned ? 'abandoned' : 'idle');
         reaped.push(code);
       }
     }

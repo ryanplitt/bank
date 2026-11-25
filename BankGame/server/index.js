@@ -56,7 +56,10 @@ if (fs.existsSync(clientDist)) {
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  maxHttpBufferSize: 1e6, // 1 MB — plenty for our small payloads, a flood guard
+  // Every client message is a few dozen bytes of JSON (a name, a code, a rules
+  // object). 16 KB is generous headroom and keeps a hostile client from making
+  // the server buffer and parse a megabyte per event.
+  maxHttpBufferSize: 16 * 1024,
 });
 
 registerHandlers(io);

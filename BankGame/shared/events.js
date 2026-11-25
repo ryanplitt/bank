@@ -40,7 +40,8 @@ export const S2C = {
   FEED: 'feed',
   /** A request failed. `{ code, message }` */
   ERROR: 'error:info',
-  /** This client was removed from the room (kicked, or the room closed). */
+  /** This client was removed from the room (kicked, or the room closed).
+   *  `{ code, reason }` where reason is 'kicked' | 'idle' | 'abandoned' | 'closed'. */
   REMOVED: 'removed',
 };
 
@@ -54,6 +55,8 @@ export const ERROR_CODES = {
   INVALID_CODE: 'INVALID_CODE',
   INVALID_RULES: 'INVALID_RULES',
   NOT_IN_GAME: 'NOT_IN_GAME',
+  /** This socket already holds a seat (or is watching); leave first. */
+  ALREADY_IN_GAME: 'ALREADY_IN_GAME',
   NOT_HOST: 'NOT_HOST',
   BAD_PHASE: 'BAD_PHASE',
   ALREADY_BANKED: 'ALREADY_BANKED',

@@ -114,14 +114,21 @@ export function removePlayer(state, playerId) {
   return next;
 }
 
+/** Largest single host score correction, and the ceiling a score can reach.
+ *  Without these a hostile (or fat-fingered) delta could push a score to
+ *  Infinity, which JSON-serialises to null and breaks every client's board. */
+export const MAX_SCORE_ADJUST = 1_000_000;
+export const MAX_SCORE = 1_000_000_000;
+
 /** Host correction: nudge a player's score by a delta (may be negative). */
 export function adjustScore(state, playerId, delta) {
-  const amount = Math.trunc(Number(delta) || 0);
+  const raw = Math.trunc(Number(delta) || 0);
+  const amount = Math.max(-MAX_SCORE_ADJUST, Math.min(MAX_SCORE_ADJUST, raw));
   if (!amount) return state;
   const next = clone(state);
   const player = next.players.find((p) => p.id === playerId);
   if (!player) return state;
-  player.score = Math.max(0, player.score + amount);
+  player.score = Math.min(MAX_SCORE, Math.max(0, player.score + amount));
   return next;
 }
 

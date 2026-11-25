@@ -22,12 +22,17 @@ export default function DiceTray({ lastRoll }) {
   // Key that lets React remount/restart the sequence per authoritative roll.
   const rollKey = lastRoll ? `${lastRoll.rollNumber}-${lastRoll.dice.join('')}` : 'idle';
   const [cycling, setCycling] = useState(null);
+  // Primitives, not the `lastRoll` object: every state snapshot arrives as
+  // freshly-parsed JSON, so the object's identity changes on a bank, a join,
+  // a pause… and depending on it would replay the shake for a roll that
+  // already happened.
+  const d1 = lastRoll ? lastRoll.dice[0] : null;
+  const d2 = lastRoll ? lastRoll.dice[1] : null;
 
   // Start the cosmetic face-cycling whenever a new roll lands; flip to the
   // real faces after the shake. Cleaned up if the roll changes mid-flight.
   useEffect(() => {
-    if (!lastRoll) return undefined;
-    const [d1, d2] = lastRoll.dice;
+    if (d1 === null) return undefined;
     setCycling([d1, d2]);
     let n = 0;
     const id = setInterval(() => {
@@ -40,7 +45,7 @@ export default function DiceTray({ lastRoll }) {
       }
     }, CYCLE_INTERVAL);
     return () => clearInterval(id);
-  }, [rollKey, lastRoll]);
+  }, [rollKey, d1, d2]);
 
   if (!lastRoll) {
     return (

@@ -37,7 +37,15 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
   // Which round's bust reveal has already played out here. Storing the round
   // number rather than a boolean means the next bust re-arms the reveal without
   // needing to be reset, and a re-render can never replay one we've finished.
-  const [revealedRound, setRevealedRound] = useState(null);
+  // Arriving (or resuming) onto a round that already busted counts as seen:
+  // replaying a 3-second "SEVEN!" for something that happened a minute ago
+  // only delays the host's start-next-round button.
+  const [revealedRound, setRevealedRound] = useState(() => (busted ? round : null));
+  // Spectators keep this board mounted across games, and round numbers repeat,
+  // so a new lobby re-arms the reveal.
+  useEffect(() => {
+    if (phase === 'lobby') setRevealedRound(null);
+  }, [phase]);
   // Stable per round, so an unrelated state push can't restart the reveal's
   // hand-off timer and strand the board on the bust screen.
   const endReveal = useCallback(() => setRevealedRound(round), [round]);

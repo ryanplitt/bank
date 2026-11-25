@@ -43,6 +43,7 @@ export default function App() {
           join={game.join}
           resume={game.resume}
           watch={game.watch}
+          error={lastError}
         />
       ) : isSpectator ? (
         <GameBoard

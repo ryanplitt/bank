@@ -217,3 +217,56 @@ test('a reconnecting player resumes in place with their score', async ({ browser
   await a.close();
   await b.close();
 });
+
+test('a dropped connection re-seats the player on its own, without a reload', async ({ browser }) => {
+  const a = await browser.newContext();
+  const aPage = await a.newPage();
+  const b = await browser.newContext();
+  const bPage = await b.newPage();
+
+  // Hold on to Brie's websocket so the test can sever it like a phone losing
+  // signal (the server sees a disconnect; the page just sees the socket close).
+  const sockets = [];
+  await bPage.routeWebSocket(/socket\.io/, (ws) => {
+    ws.connectToServer();
+    sockets.push(ws);
+  });
+
+  const code = await createHost(aPage);
+  await joinGame(bPage, 'Brie', code);
+  await aPage.getByRole('button', { name: /Start game/ }).click();
+  await aPage.waitForSelector('.board', { timeout: WAIT });
+  await bPage.waitForSelector('.board', { timeout: WAIT });
+
+  // socket.io upgrades from polling to websocket a beat after connecting.
+  await expect.poll(() => sockets.length, { timeout: WAIT }).toBeGreaterThan(0);
+  await Promise.all(sockets.map((ws) => ws.close()));
+
+  const awayMarker = () =>
+    aPage.waitForFunction((on) => {
+      const rows = [...document.querySelectorAll('.scoreboard .row')];
+      const brie = rows.find((r) => r.querySelector('.name')?.textContent.includes('Brie'));
+      return Boolean(brie) && brie.textContent.includes('⋯') === on;
+    }, true, { timeout: WAIT });
+  await awayMarker();
+
+  // No reload, no Resume click: the client reconnects and re-seats itself, so
+  // the host's board shows Brie present again...
+  await aPage.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('.scoreboard .row')];
+    const brie = rows.find((r) => r.querySelector('.name')?.textContent.includes('Brie'));
+    return Boolean(brie) && !brie.textContent.includes('⋯');
+  }, undefined, { timeout: WAIT });
+
+  // ...and her board is live again: the next auto-roll changes her pot.
+  const potOf = (page) => page.locator('.pot-value').first().innerText();
+  const seen = await potOf(bPage);
+  await bPage.waitForFunction((prev) => {
+    const el = document.querySelector('.pot-value');
+    return el && el.textContent !== prev;
+  }, seen, { timeout: WAIT });
+  expect(await bPage.locator('.conn-banner').count()).toBe(0);
+
+  await a.close();
+  await b.close();
+});

@@ -313,6 +313,170 @@ describe('spectators', () => {
   });
 });
 
+describe('review fixes: host, clock, lobby ghosts', () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  it('re-arms the host transfer when someone returns after the timer fired on an empty table', async () => {
+    const room = new Room('ABC123', 'A', { hostGraceMs: 30 });
+    room.join('A', 'Ann');
+    room.join('B', 'Bob');
+    room.markDisconnected('A');
+    room.markDisconnected('B');
+    await sleep(70); // grace expires with nobody connected to take the role
+    expect(room.isHost('A')).toBe(true);
+    room.resume('B');
+    await sleep(70);
+    expect(room.isHost('B')).toBe(true); // used to stay stuck on absent Ann
+    room.destroy();
+  });
+
+  it('playAgain keeps the current host instead of reverting to the eldest player', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    room.transferHost('p2');
+    room.endNow();
+    room.playAgain();
+    expect(room.hostId).toBe('p2');
+    expect(room.state.phase).toBe('lobby');
+  });
+
+  it('playAgain starts the transfer countdown if the host is away', async () => {
+    const room = new Room('ABC123', 'A', { hostGraceMs: 30 });
+    room.join('A', 'Ann');
+    room.join('B', 'Bob');
+    room.start();
+    room.markDisconnected('A');
+    room.endNow();
+    room.playAgain();
+    await sleep(70);
+    expect(room.isHost('B')).toBe(true);
+    room.destroy();
+  });
+
+  it('a plain resume neither pushes the roll deadline out nor repeats within the cooldown', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    room.start();
+    const first = room.nextRollAt;
+    room.resume('p2'); // already connected: no fresh window
+    expect(room.nextRollAt).toBe(first);
+
+    room.markDisconnected('p2');
+    room.nextRollAt -= 5000; // time passes
+    const before = room.nextRollAt;
+    room.resume('p2'); // genuine reconnect: one fresh window
+    expect(room.nextRollAt).toBeGreaterThan(before);
+
+    room.markDisconnected('p2');
+    room.nextRollAt -= 5000;
+    const again = room.nextRollAt;
+    room.resume('p2'); // a second flap inside the cooldown must not extend it
+    expect(room.nextRollAt).toBe(again);
+    room.destroy();
+  });
+
+  it('publishes exactly one snapshot per roll, carrying the next deadline', () => {
+    const { room, emitted } = makeRoom();
+    room.join('p2', 'Brie');
+    room.start();
+    const before = emitted.state.length;
+    room.doRoll();
+    expect(emitted.state.length - before).toBe(1);
+    expect(emitted.state.at(-1).nextRollAt).toBe(room.nextRollAt);
+    expect(room.nextRollAt).not.toBeNull();
+    room.destroy();
+  });
+
+  it('stamps serverNow so clients can correct for a skewed clock', () => {
+    const { room } = makeRoom();
+    expect(Math.abs(room.publicState().serverNow - Date.now())).toBeLessThan(1000);
+  });
+
+  it('drops a lobby player who stays gone, freeing the slot and the name', async () => {
+    const room = new Room('ABC123', 'host', { lobbyGhostMs: 30 });
+    room.join('host', 'Host');
+    room.join('p2', 'Brie');
+    room.markDisconnected('p2');
+    expect(room.players.has('p2')).toBe(true); // still there for a refresh
+    await sleep(70);
+    expect(room.players.has('p2')).toBe(false);
+    expect(room.join('p3', 'Brie').ok).toBe(true); // the name is free again
+    room.destroy();
+  });
+
+  it('keeps a lobby player who returns inside the grace', async () => {
+    const room = new Room('ABC123', 'host', { lobbyGhostMs: 40 });
+    room.join('host', 'Host');
+    room.join('p2', 'Brie');
+    room.markDisconnected('p2');
+    room.resume('p2');
+    await sleep(90);
+    expect(room.players.has('p2')).toBe(true);
+    room.destroy();
+  });
+
+  it('never drops a player mid-game: the roster is the score sheet', async () => {
+    const room = new Room('ABC123', 'host', { lobbyGhostMs: 20 });
+    room.join('host', 'Host');
+    room.join('p2', 'Brie');
+    room.start();
+    room.markDisconnected('p2');
+    await sleep(60);
+    expect(room.players.has('p2')).toBe(true);
+    room.destroy();
+  });
+
+  it('removeFromLobby re-elects a connected host and refuses once the game started', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    expect(room.removeFromLobby('host').ok).toBe(true);
+    expect(room.hostId).toBe('p2');
+    room.join('p3', 'Cy');
+    room.start();
+    expect(room.removeFromLobby('p3').ok).toBe(false);
+    room.destroy();
+  });
+
+  it('will not start while a seated player is disconnected', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    room.markDisconnected('p2');
+    expect(room.canStart()).toBe(false);
+    expect(room.start().ok).toBe(false);
+    room.resume('p2');
+    expect(room.canStart()).toBe(true);
+    room.destroy();
+  });
+
+  it('arms nothing once destroyed', async () => {
+    const room = new Room('ABC123', 'A', { hostGraceMs: 20, lobbyGhostMs: 20 });
+    room.join('A', 'Ann');
+    room.join('B', 'Bob');
+    room.destroy();
+    room.markDisconnected('A');
+    expect(room.hostGraceTimer).toBeNull();
+    expect(room.ghostTimers.size).toBe(0);
+  });
+
+  it('announces watcher arrivals and departures in the snapshot', () => {
+    const { room, emitted } = makeRoom();
+    room.addSpectator();
+    expect(emitted.state.at(-1).spectatorCount).toBe(1);
+    room.removeSpectator();
+    expect(emitted.state.at(-1).spectatorCount).toBe(0);
+  });
+
+  it('clamps host score corrections so a score can never become Infinity', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    room.adjustPlayerScore('p2', 1e308);
+    room.adjustPlayerScore('p2', 1e308);
+    const score = room.publicState().players.find((p) => p.id === 'p2').score;
+    expect(Number.isFinite(score)).toBe(true);
+    expect(score).toBeLessThanOrEqual(2_000_000);
+  });
+});
+
 describe('RoomManager', () => {
   it('creates, looks up, and deletes rooms', () => {
     const mgr = new RoomManager();
@@ -331,13 +495,43 @@ describe('RoomManager', () => {
     expect(mgr.size).toBe(1);
   });
 
-  it('reaps idle rooms past the TTL', () => {
-    const mgr = new RoomManager({ ttlMs: 1000 });
+  it('reaps idle rooms past the TTL once nobody is connected', () => {
+    const mgr = new RoomManager({ ttlMs: 1000, emptyTtlMs: 60_000 });
     const r = mgr.create('AAA111', 'host');
+    r.markDisconnected('host'); // still inside the abandoned grace
     r.lastActiveAt = Date.now() - 5000; // simulate staleness
     const reaped = mgr.sweepOnce();
     expect(reaped).toContain('AAA111');
     expect(mgr.has('AAA111')).toBe(false);
+  });
+
+  it('never reaps a stale room that somebody is still connected to', () => {
+    // A lobby of people waiting on a late friend sends no events for a long
+    // while but is very much alive.
+    const mgr = new RoomManager({ ttlMs: 1000 });
+    const r = mgr.create('AAA111', 'host');
+    r.lastActiveAt = Date.now() - 5000;
+    expect(mgr.sweepOnce()).toEqual([]);
+    expect(mgr.has('AAA111')).toBe(true);
+  });
+
+  it('announces a closed room, with the reason, to the onClose hook', () => {
+    const closed = [];
+    const mgr = new RoomManager({
+      ttlMs: 60_000,
+      emptyTtlMs: 1,
+      onClose: (room, reason) => closed.push([room.code, reason]),
+    });
+    const r = mgr.create('AAA111', 'host');
+    r.markDisconnected('host');
+    r.emptySince = Date.now() - 5000;
+    mgr.sweepOnce();
+    mgr.create('BBB222', 'host');
+    mgr.delete('BBB222');
+    expect(closed).toEqual([
+      ['AAA111', 'abandoned'],
+      ['BBB222', 'closed'],
+    ]);
   });
 
   it('keeps a recently-active room alive', () => {
@@ -374,7 +568,7 @@ describe('RoomManager', () => {
 
   it('sweeper starts and can be stopped without blocking the process', () => {
     const mgr = new RoomManager({ ttlMs: 50 });
-    mgr.create('AAA111', 'host');
+    mgr.create('AAA111', 'host').markDisconnected('host');
     mgr.startSweeper(10);
     // Eventually the room is gone.
     return new Promise((resolve) => {
@@ -382,7 +576,7 @@ describe('RoomManager', () => {
         mgr.stopSweeper();
         expect(mgr.has('AAA111')).toBe(false);
         resolve();
-      }, 60);
+      }, 150);
     });
   });
 });
