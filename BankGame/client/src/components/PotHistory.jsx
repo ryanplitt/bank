@@ -13,6 +13,14 @@
  * scroll of small chips; on wide screens the chips open up with a pip preview.
  */
 
+/** How many of the feed's roll lines the pot-history strip shows. */
+const POT_HISTORY_SIZE = 8;
+
+/** The newest roll lines from the narration feed, oldest first. */
+export function recentRolls(feed, size = POT_HISTORY_SIZE) {
+  return feed.filter((e) => e.kind === 'roll').slice(-size);
+}
+
 export default function PotHistory({ lastRolls }) {
   if (lastRolls.length === 0) return null;
 

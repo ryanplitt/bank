@@ -742,3 +742,40 @@ describe('reconnect: a new socket rebinds the seat', () => {
     await back.waitFor((s) => s.rollNumber >= 1, 'broadcast reaches the resumed socket');
   });
 });
+
+describe('safe-roll banking lock and TV mode over the wire', () => {
+  it('rejects a bank during the safe rolls and toggles tv mode for everyone', async () => {
+    const host = await createRoom();
+    const p2 = connect();
+    await p2.once('connect');
+    p2.emit(C2S.JOIN_GAME, { name: 'Brie', code: host.code });
+    await p2.once(S2C.SESSION);
+    await host.c.waitFor((s) => s.players.length === 2, 'two seated');
+
+    host.c.emit(C2S.UPDATE_RULES, { rules: { noBankingDuringSafeRolls: true } });
+    await host.c.waitFor((s) => s.rules.noBankingDuringSafeRolls === true, 'rule applied');
+
+    host.c.emit(C2S.START_GAME, {});
+    await host.c.waitFor((s) => s.phase === 'playing', 'started');
+    host.c.emit(C2S.FORCE_ROLL, {});
+    const st = await host.c.waitFor((s) => s.pot > 0, 'first roll lands');
+    expect(st.rollNumber).toBeLessThan(st.rules.safeRolls);
+
+    host.c.emit(C2S.BANK);
+    await host.c.waitError('BANKING_LOCKED');
+
+    host.c.emit(C2S.SET_TV_MODE, { enabled: true });
+    await p2.waitFor((s) => s.tvMode === true, 'tv mode on');
+    host.c.emit(C2S.SET_TV_MODE, { enabled: false });
+    await p2.waitFor((s) => s.tvMode === false, 'tv mode off');
+  });
+
+  it('ignores a non-boolean tv mode payload instead of flipping it on', async () => {
+    const host = await createRoom();
+    host.c.emit(C2S.SET_TV_MODE, { enabled: 'false' });
+    await host.c.waitError('NOT_IN_GAME');
+    host.c.emit(C2S.SET_TV_MODE, { enabled: true });
+    const st = await host.c.waitFor((s) => s.tvMode === true, 'strict boolean accepted');
+    expect(st.tvMode).toBe(true);
+  });
+});

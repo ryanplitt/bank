@@ -10,6 +10,8 @@
   --accent: #f4c542;
   --good: #2ecc71;
   --danger: #e74c3c;
+  --danger-text: #ffb3ad;
+  --danger-bg: #3a2023;
   --line: #2c3450;
   --radius: 14px;
 }
@@ -1025,11 +1027,6 @@ button:disabled {
 
 /* ---------------- feed ---------------- */
 
-.feed {
-  max-height: 220px;
-  overflow-y: auto;
-}
-
 .feed-empty {
   color: var(--muted);
   font-size: 0.85rem;
@@ -1275,6 +1272,10 @@ button:disabled {
     align-items: center;
     padding: 8px 10px;
     border-radius: 12px;
+    /* The 58px phone width would squish the pip thumbnails + text that this
+       row layout adds, spilling them out of the chip. Let the chip size to its
+       content now that there's room to wrap. */
+    width: auto;
   }
 
   .pot-history-pips {
@@ -1295,3 +1296,252 @@ button:disabled {
   }
 }
 
+/* ---------------- TV / big-screen dashboard ----------------
+   Opened via `?room=CODE&tv=1` (a read-only watcher on the wall) or the host's
+   own "Dashboard" button. Full-bleed, no controls, big leaderboard + dice. */
+
+.app--tv {
+  max-width: none;
+  padding: 0;
+}
+
+.tv-dashboard {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 32px 40px calc(32px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tv-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tv-title {
+  font-size: 2.4rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+
+.tv-code {
+  margin-left: 16px;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tv-exit {
+  color: var(--muted);
+  opacity: 0.35;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.tv-exit:hover,
+.tv-exit:focus-visible {
+  opacity: 1;
+}
+
+.tv-lobby {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.tv-join {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+
+.tv-join h2 {
+  font-size: 1.5rem;
+}
+
+.tv-join-code {
+  font-size: 5rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+}
+
+.tv-main {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 28px;
+  align-items: start;
+  flex: 1 1 auto;
+}
+
+.tv-dice-zone {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+}
+
+.tv-roll-note {
+  text-align: center;
+  color: var(--muted);
+  font-size: 1rem;
+  margin: 4px 0;
+}
+
+.tv-score {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+}
+
+.tv-score h2 {
+  font-size: 1.3rem;
+  margin-bottom: 14px;
+}
+
+.tv-score .row {
+  grid-template-columns: 40px 1fr auto 90px;
+  padding: 14px 10px;
+  gap: 12px;
+  font-size: 1.2rem;
+}
+
+.tv-score .name {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.tv-score .score {
+  font-size: 1.9rem;
+}
+
+.tv-dashboard .pot {
+  width: 100%;
+  padding: 30px 20px;
+  margin: 0;
+}
+
+.tv-dashboard .pot-value {
+  font-size: 6rem;
+}
+
+.tv-dashboard .die {
+  width: 130px;
+  height: 130px;
+  border-radius: 26px;
+  padding: 15px;
+}
+
+.tv-dashboard .die-pip::after {
+  width: 22px;
+  height: 22px;
+}
+
+.tv-dashboard .dice-anim {
+  gap: 28px;
+}
+
+.tv-banner {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.tv-banner--win {
+  color: var(--accent);
+  font-size: 1.8rem;
+}
+
+.tv-banner--bust {
+  border-color: var(--danger);
+  color: var(--danger-text);
+  background: linear-gradient(180deg, var(--danger-bg), var(--panel));
+}
+
+/* Narrow windows (a phone, a small browser pane): stack the two columns. */
+@media (max-width: 900px) {
+  .tv-main,
+  .tv-lobby {
+    grid-template-columns: 1fr;
+  }
+
+  .tv-dashboard {
+    padding: 20px 16px;
+  }
+
+  .tv-dashboard .pot-value {
+    font-size: 4rem;
+  }
+
+  .tv-dashboard .die {
+    width: 90px;
+    height: 90px;
+  }
+}
+
+/* ---------------- TV display entry + host link ---------------- */
+
+.tv-entry {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+.tv-entry h2 {
+  font-size: 1.05rem;
+  margin-bottom: 6px;
+}
+
+.tv-entry p {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.tv-action {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.tv-link {
+  display: grid;
+  gap: 8px;
+}
+
+.tv-link-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tv-link-sub {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.tv-link-help {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}

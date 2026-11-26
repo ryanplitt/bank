@@ -1,16 +1,15 @@
 import Scoreboard from './Scoreboard.jsx';
 import HostPanel from './HostPanel.jsx';
 import QrInvite from './QrInvite.jsx';
+import TvLink from './TvLink.jsx';
+import { joinUrl } from '../links.js';
 import { C2S, describeRules } from '@bank/shared';
 
 /** Pre-game lobby: show who's here, the rules, a share link, and a start. */
 export default function Lobby({ state, me, isHost, connected, feed, host }) {
   const canStart = Boolean(state.canStart && isHost && connected);
 
-  const shareUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/?room=${state.code}`
-      : '';
+  const shareUrl = joinUrl(state.code);
 
   async function copyLink() {
     try {
@@ -41,6 +40,12 @@ export default function Lobby({ state, me, isHost, connected, feed, host }) {
         <h3>Rules</h3>
         <p className="rules-summary">{describeRules(state.rules)}</p>
       </div>
+
+      {isHost && (
+        <div className="panel">
+          <TvLink state={state} host={host} />
+        </div>
+      )}
 
       {isHost && <HostPanel state={state} host={host} me={me} />}
 

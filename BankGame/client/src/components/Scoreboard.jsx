@@ -31,6 +31,7 @@ export default function Scoreboard({ players, me, phase, lastRoundResult }) {
 }
 
 function roundState(p, phase, busted) {
+  if (phase === 'lobby') return ''; // nobody is in or out until the game starts
   const banked = p.bankedThisRound !== null;
   if (phase === 'gameOver') {
     if (p.score > 0) {

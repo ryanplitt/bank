@@ -15,12 +15,13 @@
  * keeps this module fully unit-testable.
  */
 
-import { FEED_KIND, MAX_PLAYERS, MAX_SPECTATORS, S2C } from '@bank/shared';
+import { ERROR_CODES, FEED_KIND, MAX_PLAYERS, MAX_SPECTATORS, S2C } from '@bank/shared';
 import {
   addPlayer,
   adjustScore,
   applyRoll,
   bank,
+  bankingLocked,
   createGame,
   endGame,
   removePlayer,
@@ -88,8 +89,14 @@ export class Room {
     this.version = 0;
     /** Cap on narration history kept for late joiners. */
     this.feed = [];
+    this.feedSeq = 0;
     /** Host paused the clock (players can still bank; no auto-roll). */
     this.paused = false;
+    /** Host enabled TV mode: phones hide the scoreboard + feed and leave only
+     *  dice, pot, countdown and BANK, because a TV display (a read-only watcher
+     *  opened with `?room=CODE&tv=1`) carries those. Deliberately survives
+     *  playAgain(): the TV is still on the wall for the next game. */
+    this.tvMode = false;
     /** Last activity, used by the TTL sweeper. */
     this.lastActiveAt = Date.now();
     /** When the last connected player dropped, or null while anyone is here. */
@@ -518,6 +525,13 @@ export class Room {
     if (!entry) return { ok: false, reason: 'not a player' };
     if (!entry.inRound) return { ok: false, reason: 'already out of this round' };
     if (this.state.pot <= 0) return { ok: false, reason: 'nothing in the pot' };
+    if (bankingLocked(this.state)) {
+      return {
+        ok: false,
+        code: ERROR_CODES.BANKING_LOCKED,
+        reason: 'banking is locked during the safe rolls',
+      };
+    }
     const result = bank(this.state, playerId);
     this.state = result.state;
     if (this.state.phase === PHASE.PLAYING) {
@@ -592,6 +606,17 @@ export class Room {
     }
     this.publish();
     this.narrate({ kind: this.paused ? FEED_KIND.PAUSED : FEED_KIND.RESUMED });
+    this.touch();
+    return { ok: true };
+  }
+
+  /** Turn the big-TV dashboard mode on or off for the whole room. */
+  setTvMode(enabled) {
+    const value = Boolean(enabled);
+    if (value === this.tvMode) return { ok: true };
+    this.tvMode = value;
+    this.publish();
+    this.narrate({ kind: FEED_KIND.TV_MODE, enabled: value });
     this.touch();
     return { ok: true };
   }
@@ -696,6 +721,7 @@ export class Room {
       players,
       nextRollAt: this.nextRollAt,
       paused: this.paused,
+      tvMode: this.tvMode,
       canStart: this.canStart(),
       canStartRound: this.state.phase === PHASE.ROUND_OVER,
       spectatorCount: this.spectatorCount,
@@ -714,7 +740,10 @@ export class Room {
 
   /** Emit one narration line to the room and keep it for late joiners. */
   narrate(item) {
-    const entry = { ...item, at: Date.now() };
+    // `seq` is a per-room, ever-increasing id so clients can key feed lines
+    // stably even as the list is capped, reversed or sliced.
+    this.feedSeq += 1;
+    const entry = { ...item, at: Date.now(), seq: this.feedSeq };
     this.feed.push(entry);
     if (this.feed.length > 120) this.feed.splice(0, this.feed.length - 120);
     this.emitToRoom(S2C.FEED, entry);

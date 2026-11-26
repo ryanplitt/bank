@@ -16,7 +16,7 @@
  * which keeps this module about arithmetic rather than presentation.
  */
 
-import { FEED_KIND, normalizeRules } from '@bank/shared';
+import { FEED_KIND, isBankingLocked, normalizeRules } from '@bank/shared';
 
 export const PHASE = Object.freeze({
   LOBBY: 'lobby',
@@ -278,6 +278,9 @@ export function bank(state, playerId) {
   if (state.pot <= 0) {
     throw new Error('there is nothing in the pot to bank');
   }
+  if (bankingLocked(state)) {
+    throw new Error('banking is locked during the safe rolls');
+  }
 
   const next = clone(state);
   const player = next.players.find((p) => p.id === playerId);
@@ -381,6 +384,12 @@ export function isGameOver(state) {
 /** Whether this player may bank right now. Mirrors the guards in bank(). */
 export function canBank(state, playerId) {
   if (state.phase !== PHASE.PLAYING || state.pot <= 0) return false;
+  if (bankingLocked(state)) return false;
   const player = state.players.find((p) => p.id === playerId);
   return Boolean(player && player.inRound);
+}
+
+/** Whether the "no banking during safe rolls" rule is currently blocking. */
+export function bankingLocked(state) {
+  return isBankingLocked(state.rules, state.rollNumber);
 }

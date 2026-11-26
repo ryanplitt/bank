@@ -1,0 +1,53 @@
+import { useState } from 'react';
+import { C2S } from '@bank/shared';
+import { tvUrl } from '../links.js';
+
+/**
+ * The host's "put this on a TV" card.
+ *
+ * A TV display is a separate screen (a laptop plugged into a TV, say) that
+ * opens the link below and becomes a read-only dashboard: it takes no seat and
+ * never counts as a player. The toggle simplifies everyone's phones to just
+ * dice, pot, countdown and BANK, since the TV now carries the scoreboard + feed.
+ */
+export default function TvLink({ state, host }) {
+  const [copied, setCopied] = useState(false);
+  const url = tvUrl(state.code);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable (non-secure context); the field stays selectable */
+    }
+  }
+
+  return (
+    <div className="tv-link">
+      <div className="tv-link-head">
+        <strong>📺 TV display</strong>
+        <span className="tv-link-sub">
+          {state.spectatorCount > 0 ? `${state.spectatorCount} watching` : 'nothing connected yet'}
+        </span>
+      </div>
+      <p className="tv-link-help">
+        On the laptop or TV browser, open this link (or choose &ldquo;Use this screen as the TV display&rdquo;
+        on the join page and enter <strong>{state.code}</strong>). It only shows the game — it never
+        joins as a player.
+      </p>
+      <p className="share-field" onClick={copy} title="Click to copy">
+        {copied ? 'Copied!' : url}
+      </p>
+      <label className="rule-check">
+        <input
+          type="checkbox"
+          checked={Boolean(state.tvMode)}
+          onChange={(e) => host(C2S.SET_TV_MODE, { enabled: e.target.checked })}
+        />
+        Simplify phones — hide scoreboard &amp; feed (the TV shows them)
+      </label>
+    </div>
+  );
+}

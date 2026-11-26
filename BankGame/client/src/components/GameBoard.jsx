@@ -11,7 +11,8 @@ import RoundProgress from './RoundProgress.jsx';
 import DiceTray from './DiceTray.jsx';
 import BustReveal from './BustReveal.jsx';
 import Pot from './Pot.jsx';
-import PotHistory from './PotHistory.jsx';
+import PotHistory, { recentRolls } from './PotHistory.jsx';
+import { isBankingLocked } from '@bank/shared';
 
 /**
  * The narration feed kinds that briefly tint the whole board — a green flash
@@ -19,9 +20,6 @@ import PotHistory from './PotHistory.jsx';
  * shared screen; the flash marks the moment without covering it.
  */
 const FLASH_FEED_KINDS = new Set(['banked', 'roundBusted']);
-
-/** How many of the feed's roll lines the pot-history strip shows. */
-const POT_HISTORY_SIZE = 8;
 
 /**
  * The main in-game view. Every player sees a compact header with round progress,
@@ -33,6 +31,12 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
   const { round, rules, pot, lastRoll, nextRollAt, players, phase } = state;
   const roundOver = phase === 'roundOver';
   const busted = roundOver && state.lastRoundResult?.reason === 'busted';
+  // The "no banking during safe rolls" rule locks the button until the last
+  // safe roll has landed (same shared check the server enforces).
+  const bankingLocked = phase === 'playing' && isBankingLocked(rules, state.rollNumber);
+  // When the host turns on TV mode, seated phones drop the scoreboard + feed
+  // panels so the shared screen carries them; phones keep dice/pot/countdown/BANK.
+  const compact = Boolean(state.tvMode && !isSpectator);
 
   // Which round's bust reveal has already played out here. Storing the round
   // number rather than a boolean means the next bust re-arms the reveal without
@@ -56,7 +60,7 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
   // The state snapshot only carries the newest roll; the history strip is
   // rebuilt from the narration feed's roll lines instead (the feed is the
   // cheap, always-kept per-roll history here). Newest last, capped.
-  const lastRolls = feed.filter((e) => e.kind === 'roll').slice(-POT_HISTORY_SIZE);
+  const lastRolls = recentRolls(feed);
 
   // Round drama flash: the newest feed line being a bank or a bust briefly
   // tints the whole board. Same animation-restart trick as Pot's pulse —
@@ -129,7 +133,13 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
             disabled={isSpectator}
             canBank={isSpectator ? false : canBank}
             pot={pot}
-            hint={isSpectator ? 'read-only for spectators' : undefined}
+            hint={
+              isSpectator
+                ? 'read-only for spectators'
+                : bankingLocked
+                  ? `banking unlocks after roll ${rules.safeRolls}`
+                  : undefined
+            }
             onClick={bank}
           />
         </div>
@@ -139,20 +149,24 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
         <HostPanel state={state} host={host} me={me} />
       )}
 
-      <section className="panel">
-        <h3>Scores</h3>
-        <Scoreboard
-          players={players}
-          me={me}
-          phase={phase}
-          lastRoundResult={state.lastRoundResult}
-        />
-      </section>
+      {!compact && (
+        <section className="panel">
+          <h3>Scores</h3>
+          <Scoreboard
+            players={players}
+            me={me}
+            phase={phase}
+            lastRoundResult={state.lastRoundResult}
+          />
+        </section>
+      )}
 
-      <section className="panel">
-        <h3>Feed</h3>
-        <RollFeed feed={feed} />
-      </section>
+      {!compact && (
+        <section className="panel">
+          <h3>Feed</h3>
+          <RollFeed feed={feed} />
+        </section>
+      )}
     </div>
   );
 }
