@@ -1,5 +1,3 @@
-import { useEffect, useRef } from 'react';
-
 const KINDS = {
   playerJoined: ({ name }) => `${name} joined`,
   playerLeft: ({ name }) => `${name} disconnected`,
@@ -27,6 +25,7 @@ const KINDS = {
   gameOver: () => 'Game over 🏁',
   paused: () => '⏸ paused',
   resumed: () => '▶ resumed',
+  tvMode: ({ enabled }) => (enabled ? '📺 TV mode on' : '📺 TV mode off'),
 };
 
 function line(entry) {
@@ -36,20 +35,20 @@ function line(entry) {
   return fmt({ ...entry, name });
 }
 
-/** Append-only narration ticker, newest on top and auto-scrolled to newest. */
-export default function RollFeed({ feed }) {
-  const ref = useRef(null);
-  const newest = [...feed].reverse();
+/** How many of the newest narration lines to show. The feed used to scroll in
+ *  its own little window, which fought the page scroll on phones; now it is a
+ *  plain, capped list of recent activity and the page itself scrolls. */
+const FEED_VISIBLE_MAX = 12;
 
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = 0;
-  }, [feed.length]);
+/** Append-only narration ticker, newest on top. */
+export default function RollFeed({ feed }) {
+  const newest = [...feed].slice(-FEED_VISIBLE_MAX).reverse();
 
   return (
-    <div className="feed" ref={ref}>
+    <div className="feed">
       {newest.length === 0 && <div className="feed-empty">The story of this game will appear here.</div>}
       {newest.map((entry, i) => (
-        <div className="feed-line" key={newest.length - i}>
+        <div className="feed-line" key={entry.seq ?? `${entry.at ?? ''}-${i}`}>
           {line(entry)}
         </div>
       ))}

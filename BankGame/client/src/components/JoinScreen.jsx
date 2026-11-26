@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { describeRules } from '@bank/shared';
 import { loadIdentity, clearIdentity } from '../session.js';
+import { roomFromLocation } from '../links.js';
 
 /**
  * First screen: create or join a room.
@@ -11,18 +12,21 @@ import { loadIdentity, clearIdentity } from '../session.js';
  *   that disconnected for any reason), we offer to resume in place rather than
  *   re-joining as a fresh player.
  */
-export default function JoinScreen({ connected, create, join, resume, watch, error = null }) {
+export default function JoinScreen({
+  connected,
+  create,
+  join,
+  resume,
+  watch,
+  onTvDisplay,
+  error = null,
+}) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
 
-  function guessCodeFromLocation() {
-    const m = /[?&]room=([A-Za-z0-9]{4,8})/.exec(window.location.search || '');
-    return m ? m[1].toUpperCase() : '';
-  }
-
   useEffect(() => {
-    setCode(guessCodeFromLocation());
+    setCode(roomFromLocation());
   }, []);
 
   // Every action locks the form while it is in flight. A failed one (wrong
@@ -63,6 +67,14 @@ export default function JoinScreen({ connected, create, join, resume, watch, err
     setBusy(true);
     // No name, no seat, no session — just ride the room's broadcast read-only.
     watch(norm);
+  }
+
+  function doTvDisplay() {
+    const norm = code.trim().toUpperCase();
+    if (!norm || !onTvDisplay) return;
+    setBusy(true);
+    // This screen becomes the room's TV: read-only, no name, no seat.
+    onTvDisplay(norm);
   }
 
   function doResume() {
@@ -143,6 +155,24 @@ export default function JoinScreen({ connected, create, join, resume, watch, err
             </button>
           )}
         </form>
+      )}
+
+      {onTvDisplay && (
+        <div className="tv-entry">
+          <h2>Putting the game on a TV?</h2>
+          <p>
+            Enter the room code, then turn this screen into a dashboard. It only shows the
+            game — it never takes a seat or counts as a player.
+          </p>
+          <button
+            type="button"
+            className="tv-action"
+            disabled={busy || !code.trim()}
+            onClick={doTvDisplay}
+          >
+            📺 Use this screen as the TV display
+          </button>
+        </div>
       )}
 
       <Credit rules={DEFAULT_RULES_SUMMARY} />

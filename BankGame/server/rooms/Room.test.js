@@ -313,6 +313,55 @@ describe('spectators', () => {
   });
 });
 
+describe('tv mode and safe-roll banking', () => {
+  it('toggles the tv dashboard flag and publishes it', () => {
+    const { room, emitted } = makeRoom();
+    expect(room.publicState().tvMode).toBe(false);
+
+    room.setTvMode(true);
+    expect(room.tvMode).toBe(true);
+    expect(emitted.state.at(-1).tvMode).toBe(true);
+
+    room.setTvMode(false);
+    expect(room.publicState().tvMode).toBe(false);
+  });
+
+  it('blocks banking during the safe rolls when the rule is on', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    room.state = {
+      ...room.state,
+      rules: { ...room.state.rules, noBankingDuringSafeRolls: true },
+    };
+    room.start();
+    room.doRoll(); // [1,1] → rollNumber 1, pot 2, still inside safeRolls 3
+
+    const blocked = room.bankPlayer('host');
+    expect(blocked.ok).toBe(false);
+    expect(blocked.reason).toMatch(/safe rolls/);
+    expect(room.state.players.find((p) => p.id === 'host').inRound).toBe(true);
+    expect(blocked.code).toBe('BANKING_LOCKED');
+  });
+
+  it('numbers narration lines with an increasing seq', () => {
+    const { room, emitted } = makeRoom();
+    room.join('p2', 'Brie');
+    room.setTvMode(true);
+    room.setTvMode(false);
+    const seqs = emitted.feed.map((e) => e.seq);
+    expect(seqs.length).toBeGreaterThan(2);
+    expect(new Set(seqs).size).toBe(seqs.length);
+    expect([...seqs].sort((a, b) => a - b)).toEqual(seqs);
+  });
+
+  it('keeps tv mode across play again (the TV is still on the wall)', () => {
+    const { room } = makeRoom();
+    room.setTvMode(true);
+    room.playAgain();
+    expect(room.publicState().tvMode).toBe(true);
+  });
+});
+
 describe('review fixes: host, clock, lobby ghosts', () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

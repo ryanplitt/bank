@@ -68,6 +68,13 @@ describe('validateRules', () => {
     expect(validateRules({ resetTimerOnBank: 1 }).valid).toBe(false);
   });
 
+  it('accepts a boolean noBankingDuringSafeRolls and rejects a non-boolean', () => {
+    expect(validateRules({ noBankingDuringSafeRolls: true }).rules.noBankingDuringSafeRolls).toBe(true);
+    expect(validateRules({ noBankingDuringSafeRolls: false }).valid).toBe(true);
+    expect(validateRules({ noBankingDuringSafeRolls: 'yes' }).valid).toBe(false);
+    expect(validateRules({ noBankingDuringSafeRolls: 1 }).valid).toBe(false);
+  });
+
   it('rejects out-of-range values rather than silently clamping', () => {
     expect(validateRules({ rounds: 999 }).valid).toBe(false);
     expect(validateRules({ safeRolls: -1 }).valid).toBe(false);

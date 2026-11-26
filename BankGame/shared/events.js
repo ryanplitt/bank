@@ -28,6 +28,7 @@ export const C2S = {
   END_GAME: 'host:endGame',
   PLAY_AGAIN: 'host:playAgain',
   SET_PAUSED: 'host:setPaused',
+  SET_TV_MODE: 'host:setTvMode',
 };
 
 /** Server -> client. */
@@ -63,6 +64,7 @@ export const ERROR_CODES = {
   NOTHING_TO_BANK: 'NOTHING_TO_BANK',
   NOT_ENOUGH_PLAYERS: 'NOT_ENOUGH_PLAYERS',
   SESSION_EXPIRED: 'SESSION_EXPIRED',
+  BANKING_LOCKED: 'BANKING_LOCKED',
   RATE_LIMITED: 'RATE_LIMITED',
   SERVER_BUSY: 'SERVER_BUSY',
   INTERNAL: 'INTERNAL',
@@ -87,4 +89,5 @@ export const FEED_KIND = {
   RULES_CHANGED: 'rulesChanged',
   PAUSED: 'paused',
   RESUMED: 'resumed',
+  TV_MODE: 'tvMode',
 };

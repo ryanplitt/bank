@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import TvLink from './TvLink.jsx';
 import {
   C2S,
   DOUBLES_MODES,
@@ -34,6 +35,8 @@ export default function HostPanel({ state, me, host }) {
             End game
           </button>
         </div>
+
+        {state.phase !== 'lobby' && <TvLink state={state} host={host} />}
 
         <fieldset disabled={state.phase !== 'lobby'}>
           <legend>Rules (lobby only)</legend>
@@ -99,6 +102,14 @@ function ruleFields(draft, set, setDraft) {
           onChange={(e) => setDraft((d) => ({ ...d, resetTimerOnBank: e.target.checked }))}
         />
         Reset countdown when someone banks
+      </label>
+      <label className="rule-check">
+        <input
+          type="checkbox"
+          checked={Boolean(draft.noBankingDuringSafeRolls)}
+          onChange={(e) => setDraft((d) => ({ ...d, noBankingDuringSafeRolls: e.target.checked }))}
+        />
+        No banking during safe rolls
       </label>
       <label>
         Doubles during safe rolls

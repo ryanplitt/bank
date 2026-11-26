@@ -35,6 +35,10 @@ export const DEFAULT_RULES = Object.freeze({
   /** Whether banking resets the shared countdown for everyone (false = one
    *  fixed deadline that everyone races against). */
   resetTimerOnBank: false,
+  /** Whether the BANK button is locked while the round is still inside its
+   *  opening safe rolls (rollNumber < safeRolls). Off by default so the game
+   *  plays exactly as it always has. */
+  noBankingDuringSafeRolls: false,
 });
 
 export const RULE_LIMITS = Object.freeze({
@@ -48,6 +52,28 @@ function clampInt(value, fallback, { min, max }) {
   const n = typeof value === 'number' ? value : Number.parseInt(value, 10);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
+/**
+ * Whether the "no banking during safe rolls" rule is blocking banking right now.
+ *
+ * The single definition used by the engine, the room and every client, so the
+ * BANK button and the server can never disagree about the boundary: safe rolls
+ * are 1..safeRolls, so the lock lifts the moment roll #safeRolls has landed
+ * (rollNumber === safeRolls), when the next roll is the first dangerous one.
+ * Callers still check the phase and the pot themselves.
+ *
+ * @param {object} [rules] The room's rules.
+ * @param {number} [rollNumber] Rolls so far this round.
+ */
+export function isBankingLocked(rules, rollNumber) {
+  return Boolean(
+    rules &&
+      rules.noBankingDuringSafeRolls &&
+      Number.isFinite(rollNumber) &&
+      Number.isFinite(rules.safeRolls) &&
+      rollNumber < rules.safeRolls,
+  );
 }
 
 /**
@@ -74,6 +100,11 @@ export function normalizeRules(partial, base = DEFAULT_RULES) {
       ? input.resetTimerOnBank
       : start.resetTimerOnBank;
 
+  const noBankingDuringSafeRolls =
+    typeof input.noBankingDuringSafeRolls === 'boolean'
+      ? input.noBankingDuringSafeRolls
+      : start.noBankingDuringSafeRolls;
+
   return Object.freeze({
     rounds: clampInt(input.rounds, start.rounds, RULE_LIMITS.rounds),
     safeRolls: clampInt(input.safeRolls, start.safeRolls, RULE_LIMITS.safeRolls),
@@ -85,6 +116,7 @@ export function normalizeRules(partial, base = DEFAULT_RULES) {
       RULE_LIMITS.rollIntervalSeconds,
     ),
     resetTimerOnBank,
+    noBankingDuringSafeRolls,
   });
 }
 
@@ -99,9 +131,13 @@ export function describeRules(rules) {
     r.doublesDuringSafeRolls === 'double'
       ? 'doubles always double the pot'
       : `doubles add their sum for the first ${r.safeRolls} rolls`;
+  const banking = r.noBankingDuringSafeRolls
+    ? 'no banking during the safe rolls'
+    : 'banking allowed at any time';
   return (
     `${r.rounds} rounds · first ${r.safeRolls} rolls are safe (a 7 pays ${r.sevenBonus}) · ` +
     `${doubles} · ${r.rollIntervalSeconds}s between rolls · ` +
+    `${banking} · ` +
     `banking ${r.resetTimerOnBank ? 'resets' : 'does not reset'} the countdown`
   );
 }

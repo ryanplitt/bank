@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import socket from '../socket.js';
-import { C2S, ERROR_CODES } from '@bank/shared';
+import { C2S, ERROR_CODES, isBankingLocked } from '@bank/shared';
 import { saveIdentity, clearIdentity } from '../session.js';
 
 /** Errors that mean a resume can never succeed: stop trying and start clean. */
@@ -149,7 +149,8 @@ export function useGame() {
   const watching = Boolean(watchingCode) && Boolean(state);
   const canBank =
     Boolean(state && me && myId && state.phase === 'playing' && me.inRound && state.pot > 0) &&
-    Boolean(socket.connected);
+    Boolean(socket.connected) &&
+    !isBankingLocked(state.rules, state.rollNumber);
 
   /* ------ actions ------ */
 

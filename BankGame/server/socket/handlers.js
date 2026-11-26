@@ -168,6 +168,7 @@ export function registerHandlers(io, deps = {}) {
       [C2S.END_GAME, onEndGame],
       [C2S.PLAY_AGAIN, onPlayAgain],
       [C2S.SET_PAUSED, onSetPaused],
+      [C2S.SET_TV_MODE, onSetTvMode],
     ]) {
       socket.on(event, wrap((p) => hostCommand(socket, handler, p)));
     }
@@ -434,11 +435,13 @@ export function registerHandlers(io, deps = {}) {
     }
     const res = room.bankPlayer(ctx.playerId);
     if (!res.ok) {
-      const code = res.reason.includes('pot')
-        ? ERROR_CODES.NOTHING_TO_BANK
-        : res.reason.includes('already') || res.reason.includes('out')
-          ? ERROR_CODES.ALREADY_BANKED
-          : ERROR_CODES.BAD_PHASE;
+      const code =
+        res.code ??
+        (res.reason.includes('pot')
+          ? ERROR_CODES.NOTHING_TO_BANK
+          : res.reason.includes('already') || res.reason.includes('out')
+            ? ERROR_CODES.ALREADY_BANKED
+            : ERROR_CODES.BAD_PHASE);
       return sendError(socket, code, res.reason);
     }
   }
@@ -459,9 +462,11 @@ export function registerHandlers(io, deps = {}) {
     }
     const result = handler(socket, room, payload);
     if (result && result.ok === false) {
-      const code = result.reason?.includes('round') || result.reason?.includes('started')
-        ? ERROR_CODES.BAD_PHASE
-        : ERROR_CODES.NOT_IN_GAME;
+      const code =
+        result.code ??
+        (result.reason?.includes('round') || result.reason?.includes('started')
+          ? ERROR_CODES.BAD_PHASE
+          : ERROR_CODES.NOT_IN_GAME);
       return sendError(socket, code, result.reason);
     }
   }
@@ -525,6 +530,11 @@ export function registerHandlers(io, deps = {}) {
   }
   function onSetPaused(_s, room, p) {
     return room.setPaused(Boolean(p?.paused));
+  }
+  function onSetTvMode(_s, room, p) {
+    // Strict: Boolean("false") is true, so a sloppy client must not flip it on.
+    if (typeof p?.enabled !== 'boolean') return { ok: false, reason: 'enabled must be true or false' };
+    return room.setTvMode(p.enabled);
   }
 
   /* ------------------------------------------------------------------ *

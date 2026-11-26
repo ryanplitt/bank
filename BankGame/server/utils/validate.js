@@ -92,5 +92,8 @@ export function validateRules(raw) {
   if (raw.resetTimerOnBank !== undefined && typeof raw.resetTimerOnBank !== 'boolean') {
     return { valid: false, reason: 'resetTimerOnBank must be a boolean' };
   }
+  if (raw.noBankingDuringSafeRolls !== undefined && typeof raw.noBankingDuringSafeRolls !== 'boolean') {
+    return { valid: false, reason: 'noBankingDuringSafeRolls must be a boolean' };
+  }
   return { valid: true, rules };
 }

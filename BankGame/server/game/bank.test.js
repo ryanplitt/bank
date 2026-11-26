@@ -6,6 +6,7 @@ import {
   adjustScore,
   applyRoll,
   bank,
+  bankingLocked,
   canBank,
   createGame,
   endGame,
@@ -268,6 +269,32 @@ describe('banking', () => {
   it('refuses to bank an empty pot', () => {
     expect(() => bank(playingGame(), 'a')).toThrow(/pot/i);
     expect(canBank(playingGame(), 'a')).toBe(false);
+  });
+
+  it('allows banking during the safe rolls by default', () => {
+    let state = playingGame(['a', 'b']);
+    state = roll(state, [3, 4]); // safe 7 → pot 70, rollNumber 1
+    expect(bankingLocked(state)).toBe(false);
+    expect(canBank(state, 'a')).toBe(true);
+    expect(bank(state, 'a').state.players.find((p) => p.id === 'a').score).toBe(70);
+  });
+
+  it('locks banking during the safe rolls when the setting is on', () => {
+    let state = playingGame(['a', 'b'], { noBankingDuringSafeRolls: true });
+    state = roll(state, [3, 4]); // still inside the safe window
+    expect(state.pot).toBeGreaterThan(0);
+    expect(bankingLocked(state)).toBe(true);
+    expect(canBank(state, 'a')).toBe(false);
+    expect(() => bank(state, 'a')).toThrow(/safe rolls/i);
+  });
+
+  it('unlocks banking once the last safe roll has landed', () => {
+    let state = playingGame(['a', 'b'], { noBankingDuringSafeRolls: true, safeRolls: 1 });
+    state = roll(state, [3, 4]); // rollNumber 1 === safeRolls → window closed
+    expect(bankingLocked(state)).toBe(false);
+    expect(canBank(state, 'a')).toBe(true);
+    const after = bank(state, 'a').state;
+    expect(after.players.find((p) => p.id === 'a').score).toBe(state.pot);
   });
 
   it('refuses to bank twice', () => {
