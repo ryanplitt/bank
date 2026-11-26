@@ -407,18 +407,6 @@ button:disabled {
   letter-spacing: 0.06em;
 }
 
-.my-score {
-  text-align: center;
-  color: var(--muted);
-  font-size: 1.05rem;
-}
-
-.my-score strong {
-  color: var(--text);
-  font-size: 1.4rem;
-  margin-left: 6px;
-}
-
 .badge.you-badge {
   background: var(--accent);
   color: #1a1a1a;
@@ -554,8 +542,111 @@ button:disabled {
   background: linear-gradient(180deg, #3a2023, var(--panel));
 }
 
-.pot-pulse {
+.pot--gain {
   animation: pot-pulse 0.5s ease;
+}
+
+.pot--gain-big {
+  animation: pot-pulse-big 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.pot--gain .pot-value,
+.pot--gain-big .pot-value {
+  animation: pot-value-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+  text-shadow: 0 0 18px rgba(244, 197, 66, 0.7);
+}
+
+@keyframes pot-pulse-big {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.09);
+    box-shadow: 0 0 0 4px rgba(244, 197, 66, 0.55), 0 0 36px rgba(244, 197, 66, 0.55);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pot-value-pop {
+  0% {
+    transform: scale(0.85);
+  }
+  60% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* "+N" lifts off the pot and fades. */
+.pot-float {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translateX(-50%);
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: var(--good);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  animation: pot-float 1s ease-out forwards;
+}
+
+@keyframes pot-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -6px) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -52px) scale(1);
+  }
+}
+
+/* A ring of golden sparks for doubles and big gains. */
+.pot-spark {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  pointer-events: none;
+  opacity: 0;
+  animation: pot-spark 0.8s ease-out forwards;
+}
+
+@keyframes pot-spark {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--angle)) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateY(-55px) scale(0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pot--gain,
+  .pot--gain-big,
+  .pot--gain .pot-value,
+  .pot--gain-big .pot-value,
+  .pot-float,
+  .pot-spark {
+    animation: none;
+  }
 }
 
 @keyframes pot-pulse {
@@ -786,6 +877,7 @@ button:disabled {
   color: var(--muted);
   font-size: 0.9rem;
   margin: 8px 0;
+  min-height: 1.3em; /* keeps the layout still while the note is blank */
 }
 
 /* ---------------- pot history ----------------
@@ -1415,6 +1507,7 @@ button:disabled {
 }
 
 .tv-roll-note {
+  min-height: 1.4em;
   text-align: center;
   color: var(--muted);
   font-size: 1rem;

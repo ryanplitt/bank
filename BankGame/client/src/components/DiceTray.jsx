@@ -1,51 +1,30 @@
 import { useEffect, useState } from 'react';
 
 /**
- * The dice area. Renders two die faces with classic pips (dots) and plays a
- * lively, multi-phase roll each time the dice change.
+ * The dice area. While `rolling`, the dice tumble through random faces in a
+ * neutral style: no gold, no red, no doubles ring, nothing that hints at the
+ * real result. When `rolling` ends they land on the true faces and only then
+ * pick up the colours and effects of the roll (gold seven, doubles, red bust).
  *
- * The animation re-triggers by keying off the server's rollNumber, so it plays
- * once per authoritative roll for everyone. The sequence is purely cosmetic —
- * the final face values always come from `lastRoll.dice`:
- *
- *   1. Tumble-in          (CSS keyframes `die-roll`)
- *   2. Shake & face-cycle  (JS: brief flurry of random faces while the dice wiggle)
- *   3. Settle on the truth (CSS keyframes `die-settle` weighted bounce)
- *
- * Rolls are styled by their kind: an ordinary add is plain, a safe 7 glows
- * gold, doubles pop with a ring, and the destructive 7 (bust) shakes red.
+ * `rolling` comes from useRollReveal, the same signal that holds the pot back,
+ * so the dice reveal and the pot update happen together.
  */
-const CYCLE_MS = 700; // how long the dice visibly "roll" before settling
-const CYCLE_INTERVAL = 75; // face-change cadence during the shake
+const FACE_INTERVAL = 75; // face-change cadence during the tumble
 
-export default function DiceTray({ lastRoll, animate = true }) {
-  // Key that lets React remount/restart the sequence per authoritative roll.
+const randomFace = () => 1 + Math.floor(Math.random() * 6);
+
+export default function DiceTray({ lastRoll, rolling = false }) {
+  // Key that lets React remount/restart the tumble-in per authoritative roll.
   const rollKey = lastRoll ? `${lastRoll.rollNumber}-${lastRoll.dice.join('')}` : 'idle';
-  const [cycling, setCycling] = useState(null);
-  // Primitives, not the `lastRoll` object: every state snapshot arrives as
-  // freshly-parsed JSON, so the object's identity changes on a bank, a join,
-  // a pause… and depending on it would replay the shake for a roll that
-  // already happened.
-  const d1 = lastRoll ? lastRoll.dice[0] : null;
-  const d2 = lastRoll ? lastRoll.dice[1] : null;
+  const [faces, setFaces] = useState([randomFace(), randomFace()]);
 
-  // Start the cosmetic face-cycling whenever a new roll lands; flip to the
-  // real faces after the shake. Cleaned up if the roll changes mid-flight.
+  // Flurry of random faces for as long as the roll is in flight. These are
+  // random on purpose: they must carry no information about the real dice.
   useEffect(() => {
-    if (d1 === null || !animate) return undefined;
-    setCycling([d1, d2]);
-    let n = 0;
-    const id = setInterval(() => {
-      n += 1;
-      const shown = [1 + ((n * 7) % 6), 1 + ((n * 5) % 6)];
-      setCycling([shown[0] === d1 ? d1 : shown[0], shown[1] === d2 ? d2 : shown[1]]);
-      if (n * CYCLE_INTERVAL >= CYCLE_MS) {
-        clearInterval(id);
-        setCycling([d1, d2]); // settle on the authoritative faces
-      }
-    }, CYCLE_INTERVAL);
+    if (!rolling) return undefined;
+    const id = setInterval(() => setFaces([randomFace(), randomFace()]), FACE_INTERVAL);
     return () => clearInterval(id);
-  }, [rollKey, d1, d2, animate]);
+  }, [rolling, rollKey]);
 
   if (!lastRoll) {
     return (
@@ -55,18 +34,20 @@ export default function DiceTray({ lastRoll, animate = true }) {
     );
   }
 
-  const shown = cycling || lastRoll.dice;
-  const isRolling = cycling && cycling.join(':') !== lastRoll.dice.join(':');
-
   return (
     <div className="dice-tray" aria-live="polite">
-      <div className="dice-anim" key={rollKey} data-kind={lastRoll.kind}>
+      <div
+        className="dice-anim"
+        key={rollKey}
+        // No kind until the dice have landed: it drives the gold / red styling.
+        data-kind={rolling ? undefined : lastRoll.kind}
+      >
         {lastRoll.dice.map((final, i) => (
           <DieFace
             key={i}
-            value={isRolling ? shown[i] : final}
-            final={!isRolling}
-            doubles={lastRoll.isDoubles}
+            value={rolling ? faces[i] : final}
+            final={!rolling}
+            doubles={!rolling && lastRoll.isDoubles}
           />
         ))}
       </div>

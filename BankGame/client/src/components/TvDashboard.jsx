@@ -45,7 +45,7 @@ function useKeepAwake() {
  *
  * It is always a watcher, never a seat, so it can't be a player.
  */
-export default function TvDashboard({ state, feed }) {
+export default function TvDashboard({ state, feed, rolling = false }) {
   const { round, rules, pot, lastRoll, players, phase } = state;
   const lastRolls = recentRolls(feed);
   const busted = phase === 'roundOver' && state.lastRoundResult?.reason === 'busted';
@@ -93,8 +93,8 @@ export default function TvDashboard({ state, feed }) {
           <div className="tv-main">
             <div className="tv-dice-zone">
               <Pot value={pot} busted={busted} />
-              <DiceTray lastRoll={lastRoll} />
-              {lastRoll && <div className="tv-roll-note">{rollNote(lastRoll)}</div>}
+              <DiceTray lastRoll={lastRoll} rolling={rolling} />
+              <div className="tv-roll-note">{lastRoll && !rolling ? rollNote(lastRoll) : ''}</div>
               {phase === 'playing' && (
                 <Countdown nextRollAt={state.nextRollAt} totalMs={state.rollIntervalMs ?? rules.rollIntervalSeconds * 1000} />
               )}

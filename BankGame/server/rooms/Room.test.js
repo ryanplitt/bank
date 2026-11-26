@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MAX_SPECTATORS, SAFE_ROLL_INTERVAL_MS } from '@bank/shared';
+import { MAX_SPECTATORS, ROLL_REVEAL_MS, SAFE_ROLL_INTERVAL_MS } from '@bank/shared';
 import { Room } from './Room.js';
 import { RoomManager } from './RoomManager.js';
 
@@ -197,8 +197,9 @@ describe('game flow', () => {
       const before = room.nextRollAt;
       expect(before).toBeGreaterThan(0);
 
-      // Time passes, then a bank schedules a brand-new window from now.
-      vi.advanceTimersByTime(1000);
+      // Time passes (less than the deadline), then a bank schedules a brand-new
+      // window from now, which therefore ends later than the old deadline.
+      vi.advanceTimersByTime(1500);
       room.bankPlayer('host');
       expect(room.state.phase).toBe('playing');
       expect(room.nextRollAt).toBeGreaterThan(before);
@@ -378,6 +379,27 @@ describe('tv displays and safe-roll banking', () => {
     expect(room.publicState().rollIntervalMs).toBe(SAFE_ROLL_INTERVAL_MS); // roll 3 is still safe
     room.doRoll(); // rollNumber 3: the next roll can bust
     expect(room.publicState().rollIntervalMs).toBe(room.state.rules.rollIntervalSeconds * 1000);
+  });
+
+  it('starts the next countdown only after the dice reveal, not before', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = makeRoom();
+      room.join('p2', 'Brie');
+      room.start();
+      // Round start has no dice animation to wait for.
+      expect(room.nextRollAt - Date.now()).toBe(SAFE_ROLL_INTERVAL_MS);
+      room.doRoll();
+      // After a roll, clients spend ROLL_REVEAL_MS on the dice first.
+      expect(room.nextRollAt - Date.now()).toBe(ROLL_REVEAL_MS + SAFE_ROLL_INTERVAL_MS);
+      room.doRoll();
+      room.doRoll(); // rollNumber 3: the next roll can bust, normal pace
+      expect(room.nextRollAt - Date.now()).toBe(
+        ROLL_REVEAL_MS + room.state.rules.rollIntervalSeconds * 1000,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('numbers narration lines with an increasing seq', () => {

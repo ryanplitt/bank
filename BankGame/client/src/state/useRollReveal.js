@@ -9,12 +9,17 @@
  *
  * It only delays what is shown. `canBank`, host commands and everything else
  * keep using the live state, so nothing the player can do is ever stale.
+ *
+ * `rolling` is true while the hold is on. The dice must not show the result
+ * (real faces, colours) either, and the roll note stays blank.
  */
 
 import { useEffect, useReducer, useRef } from 'react';
+import { ROLL_REVEAL_MS } from '@bank/shared';
 
-/** Long enough for the tumble, the face-cycle and the settle (see DiceTray). */
-export const ROLL_ANIM_MS = 1250;
+/** How long the dice tumble before the outcome is shown. The server waits the
+ *  same amount before starting the next countdown (see Room.scheduleNextRoll). */
+export const ROLL_ANIM_MS = ROLL_REVEAL_MS;
 
 /** Snapshot fields that reveal the outcome of a roll. */
 const HELD_FIELDS = [
@@ -27,6 +32,9 @@ const HELD_FIELDS = [
   'winnerIds',
   'canStart',
   'canStartRound',
+  // The previous deadline is already in the past, so the countdown reads
+  // "Rolling…" until the pot is revealed and the real one takes over.
+  'nextRollAt',
 ];
 
 /** Identity of a roll: changes once per authoritative roll, never on a bank,

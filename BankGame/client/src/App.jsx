@@ -88,7 +88,7 @@ export default function App() {
           error={lastError}
         />
       ) : showDashboard ? (
-        <TvDashboard state={view.state} feed={view.feed} />
+        <TvDashboard state={view.state} feed={view.feed} rolling={view.rolling} />
       ) : isSpectator ? (
         <GameBoard
           state={view.state}
@@ -97,6 +97,7 @@ export default function App() {
           isSpectator
           canBank={false}
           feed={view.feed}
+          rolling={view.rolling}
           bank={game.bank}
           host={game.host}
         />
@@ -116,6 +117,7 @@ export default function App() {
           isHost={isHost}
           canBank={game.canBank}
           feed={view.feed}
+          rolling={view.rolling}
           bank={game.bank}
           host={game.host}
         />

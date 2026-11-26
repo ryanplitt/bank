@@ -41,11 +41,18 @@ export const DEFAULT_RULES = Object.freeze({
 });
 
 /**
- * Gap between the automatic rolls that are still inside the safe window. A safe
- * roll can't bust, so there is nothing to decide and no reason to wait the full
- * rollIntervalSeconds; this just leaves room for the dice animation to land.
+ * How long clients show the dice tumbling before the pot, scores and results
+ * appear. The server starts the next countdown only after this, so the full
+ * banking window begins once the player can actually see the new pot.
  */
-export const SAFE_ROLL_INTERVAL_MS = 2000;
+export const ROLL_REVEAL_MS = 1000;
+
+/**
+ * Gap, counted from when the pot is revealed, before the next automatic roll
+ * that is still inside the safe window. A safe roll can't bust, so there is
+ * nothing to decide and no reason to wait the full rollIntervalSeconds.
+ */
+export const SAFE_ROLL_INTERVAL_MS = 1000;
 
 export const RULE_LIMITS = Object.freeze({
   rounds: { min: 1, max: 30 },

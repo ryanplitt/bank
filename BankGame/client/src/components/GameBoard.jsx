@@ -27,18 +27,23 @@ const FLASH_FEED_KINDS = new Set(['banked', 'roundBusted']);
  * dashboard and the "start next round" action. On desktop (the host's shared
  * screen, or anyone) the same view lays out into a roomier dashboard grid.
  */
-export default function GameBoard({ state, me, isHost, canBank, feed, bank, host, isSpectator = false }) {
+export default function GameBoard({
+  state,
+  me,
+  isHost,
+  canBank,
+  feed,
+  bank,
+  host,
+  isSpectator = false,
+  rolling = false,
+}) {
   const { round, rules, pot, lastRoll, nextRollAt, players, phase } = state;
   const roundOver = phase === 'roundOver';
   const busted = roundOver && state.lastRoundResult?.reason === 'busted';
   // The "no banking during safe rolls" rule locks the button until the last
   // safe roll has landed (same shared check the server enforces).
   const bankingLocked = phase === 'playing' && isBankingLocked(rules, state.rollNumber);
-  // While a TV display is connected, seated phones become controllers: the TV
-  // carries the dice, history, scoreboard and feed, so the phone keeps only the
-  // pot, your own score, the countdown and BANK.
-  const compact = Boolean(state.tvPresent && !isSpectator);
-  const myScore = players.find((p) => p.id === me?.id)?.score;
 
   // Which round's bust reveal has already played out here. Storing the round
   // number rather than a boolean means the next bust re-arms the reveal without
@@ -119,19 +124,10 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
         <div className="board-main">
           <div className="dice-zone">
             <Pot value={pot} />
-            {compact ? (
-              typeof myScore === 'number' && (
-                <div className="my-score">
-                  Your score <strong>{myScore}</strong>
-                </div>
-              )
-            ) : (
-              <>
-                <DiceTray lastRoll={lastRoll} />
-                {lastRoll && <div className="roll-note">{rollNote(lastRoll)}</div>}
-                <PotHistory lastRolls={lastRolls} />
-              </>
-            )}
+            <DiceTray lastRoll={lastRoll} rolling={rolling} />
+            {/* Blank while the dice tumble: the note would give the result away. */}
+            <div className="roll-note">{lastRoll && !rolling ? rollNote(lastRoll) : ''}</div>
+            <PotHistory lastRolls={lastRolls} />
           </div>
 
           {phase === 'playing' && (
@@ -161,24 +157,20 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
         <HostPanel state={state} host={host} me={me} />
       )}
 
-      {!compact && (
-        <section className="panel">
-          <h3>Scores</h3>
-          <Scoreboard
-            players={players}
-            me={me}
-            phase={phase}
-            lastRoundResult={state.lastRoundResult}
-          />
-        </section>
-      )}
+      <section className="panel">
+        <h3>Scores</h3>
+        <Scoreboard
+          players={players}
+          me={me}
+          phase={phase}
+          lastRoundResult={state.lastRoundResult}
+        />
+      </section>
 
-      {!compact && (
-        <section className="panel">
-          <h3>Feed</h3>
-          <RollFeed feed={feed} />
-        </section>
-      )}
+      <section className="panel">
+        <h3>Feed</h3>
+        <RollFeed feed={feed} />
+      </section>
     </div>
   );
 }

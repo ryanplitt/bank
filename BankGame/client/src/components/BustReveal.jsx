@@ -34,7 +34,7 @@ export default function BustReveal({ state, onDone }) {
   return (
     <div className="bust-reveal">
       {/* The board already rolled these dice; just show where they landed. */}
-      <DiceTray lastRoll={state.lastRoll} animate={false} />
+      <DiceTray lastRoll={state.lastRoll} />
       <div className={`seven-flag ${showFlag ? 'seven-flag--show' : ''}`}>
         <div className="seven-flag-title">😵 SEVEN!</div>
         <div className="seven-flag-sub">

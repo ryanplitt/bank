@@ -21,6 +21,7 @@ import {
   MAX_PLAYERS,
   MAX_SPECTATORS,
   S2C,
+  ROLL_REVEAL_MS,
   SAFE_ROLL_INTERVAL_MS,
 } from '@bank/shared';
 import {
@@ -527,7 +528,9 @@ export class Room {
     const result = applyRoll(this.state, rollDice(this.rng));
     this.state = result.state;
     if (this.state.phase === PHASE.PLAYING) {
-      this.scheduleNextRoll();
+      // Clients spend ROLL_REVEAL_MS on the dice before showing the new pot, so
+      // the banking window only starts counting once that has happened.
+      this.scheduleNextRoll({ afterRoll: true });
     }
     this.publish();
     for (const e of result.events) this.narrate(e);
@@ -631,7 +634,7 @@ export class Room {
    * Clock
    * ------------------------------------------------------------ */
 
-  scheduleNextRoll() {
+  scheduleNextRoll({ afterRoll = false } = {}) {
     this.clearRollTimer();
     if (this.state.phase !== PHASE.PLAYING || this.paused) return;
     const normalMs = this.state.rules.rollIntervalSeconds * 1000;
@@ -640,12 +643,13 @@ export class Room {
     const nextRollIsSafe = this.state.rollNumber < this.state.rules.safeRolls;
     const intervalMs = nextRollIsSafe ? Math.min(normalMs, SAFE_ROLL_INTERVAL_MS) : normalMs;
     this.rollIntervalMs = intervalMs;
-    this.nextRollAt = Date.now() + intervalMs;
+    const revealMs = afterRoll ? ROLL_REVEAL_MS : 0;
+    this.nextRollAt = Date.now() + revealMs + intervalMs;
     this.rollTimer = setTimeout(() => {
       this.rollTimer = null;
       this.nextRollAt = null;
       if (this.state.phase === PHASE.PLAYING && !this.paused) this.doRoll();
-    }, intervalMs);
+    }, revealMs + intervalMs);
     // Don't keep the process alive just because a game is mid-round.
     if (this.rollTimer.unref) this.rollTimer.unref();
     // No publish here: every caller publishes right after changing state, so
