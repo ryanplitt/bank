@@ -74,6 +74,7 @@ export default function TvDashboard({ state, feed }) {
           </div>
           <section className="tv-score">
             <h2>At the table ({players.length})</h2>
+            {players.length === 0 && <p className="tv-waiting">Waiting for the first player…</p>}
             <Scoreboard players={players} me={null} phase={phase} />
           </section>
         </div>
@@ -95,7 +96,7 @@ export default function TvDashboard({ state, feed }) {
               <DiceTray lastRoll={lastRoll} />
               {lastRoll && <div className="tv-roll-note">{rollNote(lastRoll)}</div>}
               {phase === 'playing' && (
-                <Countdown nextRollAt={state.nextRollAt} totalMs={rules.rollIntervalSeconds * 1000} />
+                <Countdown nextRollAt={state.nextRollAt} totalMs={state.rollIntervalMs ?? rules.rollIntervalSeconds * 1000} />
               )}
               <PotHistory lastRolls={lastRolls} />
             </div>

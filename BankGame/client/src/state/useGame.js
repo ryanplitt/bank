@@ -44,6 +44,10 @@ export function useGame() {
   // Mirrors of state the socket callbacks need without re-subscribing.
   const sessionRef = useRef(null);
   const watchingRef = useRef(null);
+  // Whether this watcher is a TV display (so a reconnect re-attaches as one).
+  const watchingTvRef = useRef(false);
+  // A createTv() is in flight: the first snapshot tells us which room it made.
+  const creatingTvRef = useRef(false);
   // The room a resume is in flight for, so a definitive failure can clear it.
   const resumeCodeRef = useRef(null);
 
@@ -53,6 +57,8 @@ export function useGame() {
       if (code) clearIdentity(code);
       sessionRef.current = null;
       watchingRef.current = null;
+      watchingTvRef.current = false;
+      creatingTvRef.current = false;
       resumeCodeRef.current = null;
       stateRef.current = null;
       setSession(null);
@@ -69,6 +75,13 @@ export function useGame() {
       const snapshot =
         payload.nextRollAt == null ? payload : { ...payload, nextRollAt: payload.nextRollAt - skew };
       stateRef.current = snapshot;
+      if (creatingTvRef.current) {
+        // The TV asked for a room and doesn't know its code until now.
+        creatingTvRef.current = false;
+        watchingRef.current = snapshot.code;
+        watchingTvRef.current = true;
+        setWatchingCode(snapshot.code);
+      }
       setState(snapshot);
     };
     const onSession = (payload) => {
@@ -86,6 +99,7 @@ export function useGame() {
     };
     const onFeed = (entry) => setFeed((prev) => [...prev.slice(-119), entry]);
     const onError = (err) => {
+      creatingTvRef.current = false;
       if (resumeCodeRef.current && FATAL_RESUME_ERRORS.has(err.code)) {
         // The seat we tried to return to is gone (room reaped, kicked, server
         // restarted). Drop the stale identity instead of looping on it.
@@ -104,7 +118,7 @@ export function useGame() {
         socket.emit(C2S.RESUME, { code: seat.code, playerId: seat.playerId, token: seat.token });
       } else if (watchingRef.current && stateRef.current) {
         setFeed([]);
-        socket.emit(C2S.WATCH_GAME, { code: watchingRef.current });
+        socket.emit(C2S.WATCH_GAME, { code: watchingRef.current, tv: watchingTvRef.current });
       }
     };
     const onDisconnect = () => setConnected(false);
@@ -161,12 +175,21 @@ export function useGame() {
     socket.emit(C2S.RESUME, { code, playerId, token });
   }, []);
   /** Attach read-only: no name, no session, no seat — just the broadcast. */
-  const watch = useCallback((code) => {
+  const watch = useCallback((code, { tv = false } = {}) => {
     watchingRef.current = code;
+    watchingTvRef.current = tv;
     setWatchingCode(code);
     setLastError(null);
     setFeed([]); // the server replays recent history on arrival
-    socket.emit(C2S.WATCH_GAME, { code });
+    socket.emit(C2S.WATCH_GAME, { code, tv });
+  }, []);
+  /** Start a brand-new room from a TV: no name, no seat. The first phone to
+   *  join the code becomes the host. */
+  const createTv = useCallback(() => {
+    creatingTvRef.current = true;
+    setLastError(null);
+    setFeed([]);
+    socket.emit(C2S.CREATE_TV);
   }, []);
 
   // Actions are dropped while offline rather than buffered: socket.io would
@@ -204,6 +227,7 @@ export function useGame() {
     join,
     resume,
     watch,
+    createTv,
     bank,
     host,
   };

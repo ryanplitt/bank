@@ -23,23 +23,29 @@ export const DOUBLES_MODES = ['sum', 'double'];
 
 export const DEFAULT_RULES = Object.freeze({
   /** Number of rounds in a game. */
-  rounds: 15,
+  rounds: 10,
   /** How many opening rolls of each round are "safe" from a 7. */
   safeRolls: 3,
   /** Points a 7 contributes during the safe rolls. */
   sevenBonus: 70,
   /** Behaviour of doubles during the safe rolls. See DOUBLES_MODES. */
-  doublesDuringSafeRolls: 'sum',
+  doublesDuringSafeRolls: 'double',
   /** Seconds between automatic rolls; the banking window. */
-  rollIntervalSeconds: 6,
+  rollIntervalSeconds: 5,
   /** Whether banking resets the shared countdown for everyone (false = one
    *  fixed deadline that everyone races against). */
   resetTimerOnBank: false,
   /** Whether the BANK button is locked while the round is still inside its
-   *  opening safe rolls (rollNumber < safeRolls). Off by default so the game
-   *  plays exactly as it always has. */
-  noBankingDuringSafeRolls: false,
+   *  opening safe rolls (rollNumber < safeRolls). */
+  noBankingDuringSafeRolls: true,
 });
+
+/**
+ * Gap between the automatic rolls that are still inside the safe window. A safe
+ * roll can't bust, so there is nothing to decide and no reason to wait the full
+ * rollIntervalSeconds; this just leaves room for the dice animation to land.
+ */
+export const SAFE_ROLL_INTERVAL_MS = 2000;
 
 export const RULE_LIMITS = Object.freeze({
   rounds: { min: 1, max: 30 },

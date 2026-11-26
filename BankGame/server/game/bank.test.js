@@ -20,9 +20,14 @@ import {
 import { createSeededRng, defaultRng } from '../utils/rng.js';
 import { DEFAULT_RULES } from '@bank/shared';
 
+/** The rules most mechanics tests want: the original, unrestricted game. The
+ *  shipped defaults (banking locked in the safe rolls, doubles double the pot)
+ *  are covered by their own tests. */
+const CLASSIC = { noBankingDuringSafeRolls: false, doublesDuringSafeRolls: 'sum', rounds: 15 };
+
 /** A game already under way with the given players, ready for its first roll. */
 function playingGame(playerIds = ['a', 'b'], rules) {
-  let state = createGame(rules);
+  let state = createGame({ ...CLASSIC, ...rules });
   for (const id of playerIds) state = addPlayer(state, id);
   return startGame(state).state;
 }
@@ -37,7 +42,13 @@ describe('createGame', () => {
     expect(state.rules).toEqual(DEFAULT_RULES);
     expect(state.pot).toBe(0);
     expect(state.round).toBe(0);
-    expect(state.rules.rollIntervalSeconds).toBe(6);
+    expect(state.rules).toMatchObject({
+      rounds: 10,
+      safeRolls: 3,
+      rollIntervalSeconds: 5,
+      noBankingDuringSafeRolls: true,
+      doublesDuringSafeRolls: 'double',
+    });
     expect(state.rules.resetTimerOnBank).toBe(false);
   });
 
@@ -53,7 +64,7 @@ describe('createGame', () => {
     expect(state.rules.rounds).toBe(30); // clamped to the max
     expect(state.rules.safeRolls).toBe(0); // clamped to the min
     expect(state.rules.rollIntervalSeconds).toBe(DEFAULT_RULES.rollIntervalSeconds);
-    expect(state.rules.doublesDuringSafeRolls).toBe('sum');
+    expect(state.rules.doublesDuringSafeRolls).toBe(DEFAULT_RULES.doublesDuringSafeRolls);
     expect(state.rules.resetTimerOnBank).toBe(false); // non-boolean falls back
     expect(state.rules.polluted).toBeUndefined();
   });
@@ -271,12 +282,19 @@ describe('banking', () => {
     expect(canBank(playingGame(), 'a')).toBe(false);
   });
 
-  it('allows banking during the safe rolls by default', () => {
+  it('allows banking during the safe rolls when the rule is off', () => {
     let state = playingGame(['a', 'b']);
     state = roll(state, [3, 4]); // safe 7 → pot 70, rollNumber 1
     expect(bankingLocked(state)).toBe(false);
     expect(canBank(state, 'a')).toBe(true);
     expect(bank(state, 'a').state.players.find((p) => p.id === 'a').score).toBe(70);
+  });
+
+  it('locks banking during the safe rolls with the shipped defaults', () => {
+    let state = startGame(addPlayer(addPlayer(createGame(), 'a'), 'b')).state;
+    state = roll(state, [3, 4]);
+    expect(bankingLocked(state)).toBe(true);
+    expect(canBank(state, 'a')).toBe(false);
   });
 
   it('locks banking during the safe rolls when the setting is on', () => {

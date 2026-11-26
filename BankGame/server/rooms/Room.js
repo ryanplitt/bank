@@ -15,7 +15,14 @@
  * keeps this module fully unit-testable.
  */
 
-import { ERROR_CODES, FEED_KIND, MAX_PLAYERS, MAX_SPECTATORS, S2C } from '@bank/shared';
+import {
+  ERROR_CODES,
+  FEED_KIND,
+  MAX_PLAYERS,
+  MAX_SPECTATORS,
+  S2C,
+  SAFE_ROLL_INTERVAL_MS,
+} from '@bank/shared';
 import {
   addPlayer,
   adjustScore,
@@ -63,22 +70,26 @@ export const RESUME_GRACE_COOLDOWN_MS = 30 * 1000;
 export class Room {
   /**
    * @param {string} code The room code this instance is known by.
-   * @param {string} hostPlayerId Who joined first and is therefore host.
+   * @param {string|null} hostPlayerId Who joined first and is therefore host, or
+   *   null for a room started from a TV: it has no seat yet and the first
+   *   player to join becomes host.
    * @param {object} [opts] Mostly for tests.
    * @param {(max:number)=>number} [opts.rng] Randomness source for dice.
    * @param {(event:string,payload:any)=>void} [opts.emit] Room broadcast fn.
+   * @param {object} [opts.rules] Starting rules (defaults to DEFAULT_RULES).
    */
   constructor(code, hostPlayerId, opts = {}) {
     this.code = code;
     this.rng = opts.rng || defaultRng;
     this.emitToRoom = opts.emit || (() => {});
 
-    this.state = addPlayer(createGame(), hostPlayerId);
+    const game = createGame(opts.rules);
+    this.state = hostPlayerId ? addPlayer(game, hostPlayerId) : game;
     this.hostId = hostPlayerId;
     /** playerId -> { id, name, connected } — display data absent from the engine. */
-    this.players = new Map([
-      [hostPlayerId, { id: hostPlayerId, name: null, connected: true }],
-    ]);
+    this.players = new Map(
+      hostPlayerId ? [[hostPlayerId, { id: hostPlayerId, name: null, connected: true }]] : [],
+    );
     /** Roll timer handle, or null. */
     this.rollTimer = null;
     /** Socket ids currently attached (used by the io broadcast wrapper). */
@@ -92,11 +103,6 @@ export class Room {
     this.feedSeq = 0;
     /** Host paused the clock (players can still bank; no auto-roll). */
     this.paused = false;
-    /** Host enabled TV mode: phones hide the scoreboard + feed and leave only
-     *  dice, pot, countdown and BANK, because a TV display (a read-only watcher
-     *  opened with `?room=CODE&tv=1`) carries those. Deliberately survives
-     *  playAgain(): the TV is still on the wall for the next game. */
-    this.tvMode = false;
     /** Last activity, used by the TTL sweeper. */
     this.lastActiveAt = Date.now();
     /** When the last connected player dropped, or null while anyone is here. */
@@ -109,6 +115,12 @@ export class Room {
      *  integer by design: no roster entries, no presence, and `emptySince`
      *  deliberately still only counts players. */
     this.spectatorCount = 0;
+    /** How many of those watchers are TV displays. While any is connected,
+     *  phones switch to the simplified controller view (the TV carries the
+     *  scoreboard and feed). */
+    this.tvCount = 0;
+    /** Gap used by the roll timer currently armed, so clients can size the bar. */
+    this.rollIntervalMs = null;
     /** playerId -> socket id of the one live socket seated as that player. */
     this.socketByPlayer = new Map();
     /** playerId -> timer that drops a disconnected lobby player. */
@@ -198,11 +210,12 @@ export class Room {
    * no roster entry, no engine player, no presence — so a watcher can never
    * affect the game. Returns `{ ok: false }` at MAX_SPECTATORS.
    */
-  addSpectator() {
+  addSpectator({ tv = false } = {}) {
     if (this.spectatorCount >= MAX_SPECTATORS) {
       return { ok: false, reason: 'spectator cap reached' };
     }
     this.spectatorCount += 1;
+    if (tv) this.tvCount += 1;
     this.touch();
     this.publish(); // the "N watching" count is part of the snapshot
     return { ok: true };
@@ -210,9 +223,10 @@ export class Room {
 
   /** Unseat a watcher. Guards at the floor so a stray disconnect can never
    *  drive the count negative. */
-  removeSpectator() {
+  removeSpectator({ tv = false } = {}) {
     if (this.spectatorCount <= 0) return { ok: false, reason: 'no spectators' };
     this.spectatorCount -= 1;
+    if (tv && this.tvCount > 0) this.tvCount -= 1;
     this.touch();
     this.publish();
     return { ok: true };
@@ -242,6 +256,9 @@ export class Room {
       this.players.get(playerId).connected = true;
     }
     this.cancelGhost(playerId);
+    // A room started from a TV has no host yet (and a room whose whole table
+    // left has a stale one): whoever sits down next hosts.
+    if (!this.hostId || !this.players.has(this.hostId)) this.hostId = playerId;
     this.ensureHostPresent();
     this.publish();
     this.narrate({ kind: FEED_KIND.PLAYER_JOINED, name });
@@ -584,7 +601,7 @@ export class Room {
     for (const k of keep) this.state = addPlayer(this.state, k.id);
     // Whoever is hosting stays host. Only fall back to a connected player if
     // the host has somehow left the roster.
-    if (!this.players.has(this.hostId)) this.hostId = this.nextHostCandidate().id;
+    if (!this.players.has(this.hostId)) this.hostId = this.nextHostCandidate()?.id ?? null;
     this.clearRollTimer();
     this.paused = false;
     // Back in the lobby: anyone who is gone starts the ghost countdown, and an
@@ -610,17 +627,6 @@ export class Room {
     return { ok: true };
   }
 
-  /** Turn the big-TV dashboard mode on or off for the whole room. */
-  setTvMode(enabled) {
-    const value = Boolean(enabled);
-    if (value === this.tvMode) return { ok: true };
-    this.tvMode = value;
-    this.publish();
-    this.narrate({ kind: FEED_KIND.TV_MODE, enabled: value });
-    this.touch();
-    return { ok: true };
-  }
-
   /* ------------------------------------------------------------ *
    * Clock
    * ------------------------------------------------------------ */
@@ -628,7 +634,12 @@ export class Room {
   scheduleNextRoll() {
     this.clearRollTimer();
     if (this.state.phase !== PHASE.PLAYING || this.paused) return;
-    const intervalMs = this.state.rules.rollIntervalSeconds * 1000;
+    const normalMs = this.state.rules.rollIntervalSeconds * 1000;
+    // Rolls still inside the safe window can't bust, so there is nothing to
+    // decide: run them fast instead of making everyone wait out the full gap.
+    const nextRollIsSafe = this.state.rollNumber < this.state.rules.safeRolls;
+    const intervalMs = nextRollIsSafe ? Math.min(normalMs, SAFE_ROLL_INTERVAL_MS) : normalMs;
+    this.rollIntervalMs = intervalMs;
     this.nextRollAt = Date.now() + intervalMs;
     this.rollTimer = setTimeout(() => {
       this.rollTimer = null;
@@ -647,6 +658,7 @@ export class Room {
       this.rollTimer = null;
     }
     this.nextRollAt = null;
+    this.rollIntervalMs = null;
   }
 
   /** A reconnect or resume gets a fresh full window to react. */
@@ -721,7 +733,8 @@ export class Room {
       players,
       nextRollAt: this.nextRollAt,
       paused: this.paused,
-      tvMode: this.tvMode,
+      tvPresent: this.tvCount > 0,
+      rollIntervalMs: this.rollIntervalMs,
       canStart: this.canStart(),
       canStartRound: this.state.phase === PHASE.ROUND_OVER,
       spectatorCount: this.spectatorCount,

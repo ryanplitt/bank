@@ -4,7 +4,7 @@ const KINDS = {
   playerRejoined: () => `reconnected`,
   playerKicked: ({ name }) => `${name} was kicked`,
   playerRenamed: ({ name }) => `now known as ${name}`,
-  hostChanged: ({ name }) => `👑 ${name} is now host`,
+  hostChanged: ({ name }) => `${name} is now the host`,
   gameStarted: () => 'Game on! 🎉',
   roundStarted: ({ round }) => `Round ${round} begins`,
   roundEnded: ({ round }) => `Round ${round} over`,
@@ -25,7 +25,6 @@ const KINDS = {
   gameOver: () => 'Game over 🏁',
   paused: () => '⏸ paused',
   resumed: () => '▶ resumed',
-  tvMode: ({ enabled }) => (enabled ? '📺 TV mode on' : '📺 TV mode off'),
 };
 
 function line(entry) {

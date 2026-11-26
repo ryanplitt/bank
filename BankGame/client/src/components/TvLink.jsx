@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { C2S } from '@bank/shared';
 import { tvUrl } from '../links.js';
 
 /**
@@ -7,10 +6,10 @@ import { tvUrl } from '../links.js';
  *
  * A TV display is a separate screen (a laptop plugged into a TV, say) that
  * opens the link below and becomes a read-only dashboard: it takes no seat and
- * never counts as a player. The toggle simplifies everyone's phones to just
- * dice, pot, countdown and BANK, since the TV now carries the scoreboard + feed.
+ * never counts as a player. While one is connected the server reports
+ * `tvPresent` and phones simplify themselves — there is nothing to switch on.
  */
-export default function TvLink({ state, host }) {
+export default function TvLink({ state }) {
   const [copied, setCopied] = useState(false);
   const url = tvUrl(state.code);
 
@@ -29,25 +28,18 @@ export default function TvLink({ state, host }) {
       <div className="tv-link-head">
         <strong>📺 TV display</strong>
         <span className="tv-link-sub">
-          {state.spectatorCount > 0 ? `${state.spectatorCount} watching` : 'nothing connected yet'}
+          {state.tvPresent ? 'connected ✓' : 'nothing connected yet'}
         </span>
       </div>
       <p className="tv-link-help">
         On the laptop or TV browser, open this link (or choose &ldquo;Use this screen as the TV display&rdquo;
         on the join page and enter <strong>{state.code}</strong>). It only shows the game — it never
-        joins as a player.
+        joins as a player. While a TV is connected, everyone&apos;s phone switches to a simple controller
+        view automatically.
       </p>
       <p className="share-field" onClick={copy} title="Click to copy">
         {copied ? 'Copied!' : url}
       </p>
-      <label className="rule-check">
-        <input
-          type="checkbox"
-          checked={Boolean(state.tvMode)}
-          onChange={(e) => host(C2S.SET_TV_MODE, { enabled: e.target.checked })}
-        />
-        Simplify phones — hide scoreboard &amp; feed (the TV shows them)
-      </label>
     </div>
   );
 }

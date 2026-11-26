@@ -34,9 +34,11 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
   // The "no banking during safe rolls" rule locks the button until the last
   // safe roll has landed (same shared check the server enforces).
   const bankingLocked = phase === 'playing' && isBankingLocked(rules, state.rollNumber);
-  // When the host turns on TV mode, seated phones drop the scoreboard + feed
-  // panels so the shared screen carries them; phones keep dice/pot/countdown/BANK.
-  const compact = Boolean(state.tvMode && !isSpectator);
+  // While a TV display is connected, seated phones become controllers: the TV
+  // carries the dice, history, scoreboard and feed, so the phone keeps only the
+  // pot, your own score, the countdown and BANK.
+  const compact = Boolean(state.tvPresent && !isSpectator);
+  const myScore = players.find((p) => p.id === me?.id)?.score;
 
   // Which round's bust reveal has already played out here. Storing the round
   // number rather than a boolean means the next bust re-arms the reveal without
@@ -117,13 +119,23 @@ export default function GameBoard({ state, me, isHost, canBank, feed, bank, host
         <div className="board-main">
           <div className="dice-zone">
             <Pot value={pot} />
-            <DiceTray lastRoll={lastRoll} />
-            {lastRoll && <div className="roll-note">{rollNote(lastRoll)}</div>}
-            <PotHistory lastRolls={lastRolls} />
+            {compact ? (
+              typeof myScore === 'number' && (
+                <div className="my-score">
+                  Your score <strong>{myScore}</strong>
+                </div>
+              )
+            ) : (
+              <>
+                <DiceTray lastRoll={lastRoll} />
+                {lastRoll && <div className="roll-note">{rollNote(lastRoll)}</div>}
+                <PotHistory lastRolls={lastRolls} />
+              </>
+            )}
           </div>
 
           {phase === 'playing' && (
-            <Countdown nextRollAt={nextRollAt} totalMs={rules.rollIntervalSeconds * 1000} />
+            <Countdown nextRollAt={nextRollAt} totalMs={state.rollIntervalMs ?? rules.rollIntervalSeconds * 1000} />
           )}
 
           {/* A spectator's BANK button exists only to say "not for you": muted,

@@ -16,7 +16,7 @@ export default function Scoreboard({ players, me, phase, lastRoundResult }) {
           <span className="rank">{i + 1}</span>
           <span className="name">
             {p.name}
-            {p.host && <span className="badge host" title="host">👑</span>}
+            {p.host && <span className="badge host" title="host">host</span>}
             {p.id === me?.id && <span className="badge you-badge">you</span>}
             {!p.connected && <span className="badge away" title="disconnected">⋯</span>}
           </span>

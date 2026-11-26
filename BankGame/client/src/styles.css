@@ -398,7 +398,25 @@ button:disabled {
 }
 
 .badge.host {
-  font-size: 0.8rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.my-score {
+  text-align: center;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.my-score strong {
+  color: var(--text);
+  font-size: 1.4rem;
+  margin-left: 6px;
 }
 
 .badge.you-badge {
@@ -1363,6 +1381,12 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 28px;
+}
+
+.tv-waiting {
+  color: var(--muted);
+  font-size: 1.1rem;
+  margin: 0;
 }
 
 .tv-join h2 {

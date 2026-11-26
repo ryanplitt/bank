@@ -99,6 +99,7 @@ export function registerHandlers(io, deps = {}) {
       hostGraceMs: deps.hostGraceMs,
       lobbyGhostMs: deps.lobbyGhostMs,
       creatorIp,
+      rules: deps.defaultRules,
     });
     return room;
   }
@@ -153,6 +154,7 @@ export function registerHandlers(io, deps = {}) {
     socket.on(C2S.JOIN_GAME, wrap((p) => onJoin(socket, p)));
     socket.on(C2S.RESUME, wrap((p) => onResume(socket, p)));
     socket.on(C2S.LEAVE_GAME, wrap(() => onLeave(socket)));
+    socket.on(C2S.CREATE_TV, wrap(() => onCreateTv(socket)));
     socket.on(C2S.WATCH_GAME, wrap((p) => onWatch(socket, p)));
     socket.on(C2S.BANK, wrap(() => onBank(socket)));
 
@@ -168,7 +170,6 @@ export function registerHandlers(io, deps = {}) {
       [C2S.END_GAME, onEndGame],
       [C2S.PLAY_AGAIN, onPlayAgain],
       [C2S.SET_PAUSED, onSetPaused],
-      [C2S.SET_TV_MODE, onSetTvMode],
     ]) {
       socket.on(event, wrap((p) => hostCommand(socket, handler, p)));
     }
@@ -233,7 +234,7 @@ export function registerHandlers(io, deps = {}) {
     socket.leave(code);
     socket.data.game = null;
     if (ctx.spectating) {
-      room.removeSpectator();
+      room.removeSpectator({ tv: Boolean(ctx.tv) });
       return;
     }
     if (room.socketByPlayer.get(ctx.playerId) === socket.id) {
@@ -300,6 +301,38 @@ export function registerHandlers(io, deps = {}) {
     socket.emit(S2C.STATE, room.publicState());
     for (const f of room.feed) socket.emit(S2C.FEED, f);
     logger.info({ event: 'room_created', code, host: rawName });
+  }
+
+  /**
+   * Start a room from a TV. The TV takes no seat and needs no name: it is a
+   * read-only display (counted as a TV, so phones simplify) and the first
+   * player to join the code becomes the host.
+   */
+  function onCreateTv(socket) {
+    if (refuseIfSeated(socket)) return;
+    if (manager.size >= MAX_ROOMS) {
+      return sendError(socket, ERROR_CODES.SERVER_BUSY, 'too many rooms right now');
+    }
+    const ip = socket.data.ip;
+    let mine = 0;
+    for (const r of manager.rooms.values()) if (r.creatorIp === ip) mine += 1;
+    if (mine >= maxRoomsPerIp) {
+      return sendError(socket, ERROR_CODES.SERVER_BUSY, 'you already have several games running');
+    }
+
+    let code = '';
+    do {
+      code = generateGameCode(GAME_CODE_LENGTH);
+    } while (manager.has(code));
+
+    const room = makeRoom(code, null, ip);
+    detach(socket); // drop any previous watch
+    room.addSpectator({ tv: true });
+    socket.join(code);
+    room.socketIds.add(socket.id);
+    socket.data.game = { code, spectating: true, tv: true, room };
+    resendWatch(socket, room);
+    logger.info({ event: 'room_created', code, tv: true });
   }
 
   function onJoin(socket, payload) {
@@ -405,16 +438,17 @@ export function registerHandlers(io, deps = {}) {
 
     // Seat first, then release any previous watch: if this room is full the
     // watcher keeps the one they had.
-    const joined = room.addSpectator();
+    const tv = payload?.tv === true;
+    const joined = room.addSpectator({ tv });
     if (!joined.ok) {
       return sendError(socket, ERROR_CODES.SERVER_BUSY, 'that game has too many watchers');
     }
     detach(socket);
     socket.join(code);
     room.socketIds.add(socket.id);
-    socket.data.game = { code, spectating: true, room };
+    socket.data.game = { code, spectating: true, tv, room };
     resendWatch(socket, room);
-    logger.info({ event: 'spectator_joined', code });
+    logger.info({ event: 'spectator_joined', code, tv });
   }
 
   /* ------------------------------------------------------------------ *
@@ -531,12 +565,6 @@ export function registerHandlers(io, deps = {}) {
   function onSetPaused(_s, room, p) {
     return room.setPaused(Boolean(p?.paused));
   }
-  function onSetTvMode(_s, room, p) {
-    // Strict: Boolean("false") is true, so a sloppy client must not flip it on.
-    if (typeof p?.enabled !== 'boolean') return { ok: false, reason: 'enabled must be true or false' };
-    return room.setTvMode(p.enabled);
-  }
-
   /* ------------------------------------------------------------------ *
    * Helpers
    * ------------------------------------------------------------------ */

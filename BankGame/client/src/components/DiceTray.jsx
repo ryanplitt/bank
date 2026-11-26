@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react';
 const CYCLE_MS = 700; // how long the dice visibly "roll" before settling
 const CYCLE_INTERVAL = 75; // face-change cadence during the shake
 
-export default function DiceTray({ lastRoll }) {
+export default function DiceTray({ lastRoll, animate = true }) {
   // Key that lets React remount/restart the sequence per authoritative roll.
   const rollKey = lastRoll ? `${lastRoll.rollNumber}-${lastRoll.dice.join('')}` : 'idle';
   const [cycling, setCycling] = useState(null);
@@ -32,7 +32,7 @@ export default function DiceTray({ lastRoll }) {
   // Start the cosmetic face-cycling whenever a new roll lands; flip to the
   // real faces after the shake. Cleaned up if the roll changes mid-flight.
   useEffect(() => {
-    if (d1 === null) return undefined;
+    if (d1 === null || !animate) return undefined;
     setCycling([d1, d2]);
     let n = 0;
     const id = setInterval(() => {
@@ -45,7 +45,7 @@ export default function DiceTray({ lastRoll }) {
       }
     }, CYCLE_INTERVAL);
     return () => clearInterval(id);
-  }, [rollKey, d1, d2]);
+  }, [rollKey, d1, d2, animate]);
 
   if (!lastRoll) {
     return (

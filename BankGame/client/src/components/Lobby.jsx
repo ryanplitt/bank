@@ -43,7 +43,7 @@ export default function Lobby({ state, me, isHost, connected, feed, host }) {
 
       {isHost && (
         <div className="panel">
-          <TvLink state={state} host={host} />
+          <TvLink state={state} />
         </div>
       )}
 

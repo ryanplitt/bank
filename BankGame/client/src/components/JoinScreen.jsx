@@ -19,6 +19,7 @@ export default function JoinScreen({
   resume,
   watch,
   onTvDisplay,
+  onStartTv,
   error = null,
 }) {
   const [name, setName] = useState('');
@@ -75,6 +76,14 @@ export default function JoinScreen({
     setBusy(true);
     // This screen becomes the room's TV: read-only, no name, no seat.
     onTvDisplay(norm);
+  }
+
+  function doStartTv() {
+    if (!onStartTv) return;
+    setBusy(true);
+    // This screen creates the room and shows it: no name, no seat. The first
+    // phone to join the code becomes the host.
+    onStartTv();
   }
 
   function doResume() {
@@ -157,21 +166,27 @@ export default function JoinScreen({
         </form>
       )}
 
-      {onTvDisplay && (
+      {onStartTv && (
         <div className="tv-entry">
-          <h2>Putting the game on a TV?</h2>
+          <h2>On a TV or big screen?</h2>
           <p>
-            Enter the room code, then turn this screen into a dashboard. It only shows the
-            game — it never takes a seat or counts as a player.
+            Start the game right here. This screen only shows the game — everyone joins from their
+            phone with the code, and the first to join becomes the host.
           </p>
-          <button
-            type="button"
-            className="tv-action"
-            disabled={busy || !code.trim()}
-            onClick={doTvDisplay}
-          >
-            📺 Use this screen as the TV display
+          <button type="button" className="tv-action" disabled={busy} onClick={doStartTv}>
+            📺 Start a game on this TV
           </button>
+          {onTvDisplay && (
+            <button
+              type="button"
+              className="linklike"
+              disabled={busy || !code.trim()}
+              onClick={doTvDisplay}
+              title="Enter the room code above first"
+            >
+              or use this screen as the TV for room {code.trim() || '…'}
+            </button>
+          )}
         </div>
       )}
 

@@ -1,12 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MAX_SPECTATORS } from '@bank/shared';
+import { MAX_SPECTATORS, SAFE_ROLL_INTERVAL_MS } from '@bank/shared';
 import { Room } from './Room.js';
 import { RoomManager } from './RoomManager.js';
 
 /** A room with deterministic dice so tests are reproducible. */
-function makeRoom() {
+/** The original, unrestricted rules: most tests exercise mechanics, not the
+ *  shipped defaults (banking locked in the safe rolls, doubles double). */
+const CLASSIC = { noBankingDuringSafeRolls: false, doublesDuringSafeRolls: 'sum', rounds: 15 };
+
+function makeRoom({ classic = true } = {}) {
   const emitted = { state: [], feed: [] };
   const room = new Room('ABC123', 'host', {
+    rules: classic ? CLASSIC : undefined,
     rng: () => 0, // always rolls [1,1]
     emit: (event, payload) => emitted[event === 'state' ? 'state' : 'feed'].push(payload),
   });
@@ -313,17 +318,37 @@ describe('spectators', () => {
   });
 });
 
-describe('tv mode and safe-roll banking', () => {
-  it('toggles the tv dashboard flag and publishes it', () => {
-    const { room, emitted } = makeRoom();
-    expect(room.publicState().tvMode).toBe(false);
+describe('tv displays and safe-roll banking', () => {
+  it('reports a TV as present only while one is connected', () => {
+    const { room } = makeRoom();
+    expect(room.publicState().tvPresent).toBe(false);
+    room.addSpectator({ tv: true });
+    room.addSpectator(); // an ordinary watcher is not a TV
+    expect(room.publicState().tvPresent).toBe(true);
+    expect(room.publicState().spectatorCount).toBe(2);
+    room.removeSpectator({ tv: true });
+    expect(room.publicState().tvPresent).toBe(false);
+  });
 
-    room.setTvMode(true);
-    expect(room.tvMode).toBe(true);
-    expect(emitted.state.at(-1).tvMode).toBe(true);
+  it('lets a room start with no host and crowns the first player to join', () => {
+    const emitted = [];
+    const room = new Room('TV1234', null, { rng: () => 0, emit: (e, p) => emitted.push([e, p]) });
+    expect(room.hostId).toBeNull();
+    expect(room.publicState().players).toEqual([]);
+    expect(room.join('p1', 'Ryan').ok).toBe(true);
+    expect(room.isHost('p1')).toBe(true);
+    room.join('p2', 'Brie');
+    expect(room.isHost('p2')).toBe(false);
+    expect(room.canStart()).toBe(true);
+  });
 
-    room.setTvMode(false);
-    expect(room.publicState().tvMode).toBe(false);
+  it('gives the host seat to the next joiner if the whole table walked away', () => {
+    const room = new Room('TV1234', null, { rng: () => 0 });
+    room.join('p1', 'Ryan');
+    room.removeFromLobby('p1');
+    expect(room.players.size).toBe(0);
+    room.join('p2', 'Brie');
+    expect(room.isHost('p2')).toBe(true);
   });
 
   it('blocks banking during the safe rolls when the rule is on', () => {
@@ -343,22 +368,26 @@ describe('tv mode and safe-roll banking', () => {
     expect(blocked.code).toBe('BANKING_LOCKED');
   });
 
+  it('runs the safe rolls fast, then at the normal pace', () => {
+    const { room } = makeRoom();
+    room.join('p2', 'Brie');
+    room.start();
+    expect(room.publicState().rollIntervalMs).toBe(SAFE_ROLL_INTERVAL_MS);
+    room.doRoll();
+    room.doRoll();
+    expect(room.publicState().rollIntervalMs).toBe(SAFE_ROLL_INTERVAL_MS); // roll 3 is still safe
+    room.doRoll(); // rollNumber 3: the next roll can bust
+    expect(room.publicState().rollIntervalMs).toBe(room.state.rules.rollIntervalSeconds * 1000);
+  });
+
   it('numbers narration lines with an increasing seq', () => {
     const { room, emitted } = makeRoom();
     room.join('p2', 'Brie');
-    room.setTvMode(true);
-    room.setTvMode(false);
+    room.join('p3', 'Cal');
     const seqs = emitted.feed.map((e) => e.seq);
-    expect(seqs.length).toBeGreaterThan(2);
+    expect(seqs.length).toBeGreaterThan(1);
     expect(new Set(seqs).size).toBe(seqs.length);
     expect([...seqs].sort((a, b) => a - b)).toEqual(seqs);
-  });
-
-  it('keeps tv mode across play again (the TV is still on the wall)', () => {
-    const { room } = makeRoom();
-    room.setTvMode(true);
-    room.playAgain();
-    expect(room.publicState().tvMode).toBe(true);
   });
 });
 

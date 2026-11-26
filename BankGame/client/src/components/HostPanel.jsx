@@ -36,7 +36,7 @@ export default function HostPanel({ state, me, host }) {
           </button>
         </div>
 
-        {state.phase !== 'lobby' && <TvLink state={state} host={host} />}
+        {state.phase !== 'lobby' && <TvLink state={state} />}
 
         <fieldset disabled={state.phase !== 'lobby'}>
           <legend>Rules (lobby only)</legend>

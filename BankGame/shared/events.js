@@ -8,6 +8,8 @@
 /** Client -> server. */
 export const C2S = {
   CREATE_GAME: 'game:create',
+  /** Start a room from a TV: no seat, no name; the first phone to join hosts. */
+  CREATE_TV: 'game:createTv',
   JOIN_GAME: 'game:join',
   RESUME: 'game:resume',
   LEAVE_GAME: 'game:leave',
@@ -28,7 +30,6 @@ export const C2S = {
   END_GAME: 'host:endGame',
   PLAY_AGAIN: 'host:playAgain',
   SET_PAUSED: 'host:setPaused',
-  SET_TV_MODE: 'host:setTvMode',
 };
 
 /** Server -> client. */
@@ -89,5 +90,4 @@ export const FEED_KIND = {
   RULES_CHANGED: 'rulesChanged',
   PAUSED: 'paused',
   RESUMED: 'resumed',
-  TV_MODE: 'tvMode',
 };

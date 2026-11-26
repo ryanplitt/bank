@@ -13,6 +13,8 @@ import { registerHandlers } from './handlers.js';
 import { RoomManager } from '../rooms/RoomManager.js';
 import { C2S, S2C } from '@bank/shared';
 
+const CLASSIC_RULES = { noBankingDuringSafeRolls: false, doublesDuringSafeRolls: 'sum', rounds: 15 };
+
 let server;
 let port;
 let io;
@@ -28,7 +30,13 @@ async function startServer() {
   manager = new RoomManager();
   // Every test client shares 127.0.0.1, so lift the per-address room cap here;
   // the cap itself has a dedicated test below with its own server.
-  registerHandlers(io, { manager, hostGraceMs: 50, maxRoomsPerIp: 1000 });
+  registerHandlers(io, {
+    manager,
+    hostGraceMs: 50,
+    maxRoomsPerIp: 1000,
+    // Mechanics tests want the original, unrestricted game, not the shipped defaults.
+    defaultRules: CLASSIC_RULES,
+  });
   await new Promise((resolve) => server.listen(0, resolve));
   port = server.address().port;
 }
@@ -743,8 +751,8 @@ describe('reconnect: a new socket rebinds the seat', () => {
   });
 });
 
-describe('safe-roll banking lock and TV mode over the wire', () => {
-  it('rejects a bank during the safe rolls and toggles tv mode for everyone', async () => {
+describe('safe-roll banking lock and TV displays over the wire', () => {
+  it('rejects a bank during the safe rolls', async () => {
     const host = await createRoom();
     const p2 = connect();
     await p2.once('connect');
@@ -763,19 +771,42 @@ describe('safe-roll banking lock and TV mode over the wire', () => {
 
     host.c.emit(C2S.BANK);
     await host.c.waitError('BANKING_LOCKED');
-
-    host.c.emit(C2S.SET_TV_MODE, { enabled: true });
-    await p2.waitFor((s) => s.tvMode === true, 'tv mode on');
-    host.c.emit(C2S.SET_TV_MODE, { enabled: false });
-    await p2.waitFor((s) => s.tvMode === false, 'tv mode off');
   });
 
-  it('ignores a non-boolean tv mode payload instead of flipping it on', async () => {
+  it('starts a room from a TV: no seat, first player to join hosts, phones see the TV', async () => {
+    const tv = connect();
+    await tv.once('connect');
+    tv.emit(C2S.CREATE_TV);
+    const lobby = await tv.waitFor((s) => typeof s.code === 'string', 'tv sees its room');
+    expect(lobby.players).toEqual([]);
+    expect(lobby.hostId).toBeNull();
+    expect(lobby.tvPresent).toBe(true);
+
+    const p1 = connect();
+    await p1.once('connect');
+    p1.emit(C2S.JOIN_GAME, { name: 'Ryan', code: lobby.code });
+    await p1.once(S2C.SESSION);
+    const seated = await p1.waitFor((s) => s.players.length === 1, 'first player seated');
+    expect(seated.players[0]).toMatchObject({ name: 'Ryan', host: true });
+    expect(seated.tvPresent).toBe(true);
+
+    // The host can run the game from their phone.
+    const p2 = connect();
+    await p2.once('connect');
+    p2.emit(C2S.JOIN_GAME, { name: 'Brie', code: lobby.code });
+    await p2.once(S2C.SESSION);
+    await p1.waitFor((s) => s.canStart === true, 'can start');
+    p1.emit(C2S.START_GAME, {});
+    await tv.waitFor((s) => s.phase === 'playing', 'tv sees the game start');
+  });
+
+  it('stops reporting a TV once its screen disconnects', async () => {
     const host = await createRoom();
-    host.c.emit(C2S.SET_TV_MODE, { enabled: 'false' });
-    await host.c.waitError('NOT_IN_GAME');
-    host.c.emit(C2S.SET_TV_MODE, { enabled: true });
-    const st = await host.c.waitFor((s) => s.tvMode === true, 'strict boolean accepted');
-    expect(st.tvMode).toBe(true);
+    const tv = connect();
+    await tv.once('connect');
+    tv.emit(C2S.WATCH_GAME, { code: host.code, tv: true });
+    await host.c.waitFor((s) => s.tvPresent === true, 'tv attached');
+    tv.socket.disconnect();
+    await host.c.waitFor((s) => s.tvPresent === false, 'tv gone');
   });
 });
