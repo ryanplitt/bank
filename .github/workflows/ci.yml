@@ -44,3 +44,26 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t bank:ci .
+
+  # Deploy to Fly.io once everything above is green, but only for pushes to
+  # main (never for pull requests). Needs a FLY_API_TOKEN repository secret:
+  #   fly tokens create deploy -a bank-yxkpxq
+  # --ha=false keeps the app on exactly one machine (see fly.toml: rooms live in
+  # memory, so a second machine would split them). The concurrency group stops
+  # two deploys from running at once and never cancels one that is mid-flight.
+  deploy:
+    needs: lint-test-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
