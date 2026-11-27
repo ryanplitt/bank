@@ -5,6 +5,7 @@ import JoinScreen from './components/JoinScreen.jsx';
 import Lobby from './components/Lobby.jsx';
 import GameBoard from './components/GameBoard.jsx';
 import TvDashboard from './components/TvDashboard.jsx';
+import ReactionLayer from './components/ReactionLayer.jsx';
 import { rememberTvDisplay, roomFromLocation, wantsTvDisplay } from './links.js';
 import './styles.css';
 
@@ -76,6 +77,15 @@ export default function App() {
         </div>
       )}
 
+      {inGame && (
+        <ReactionLayer
+          reactions={game.reactions}
+          rolling={view.rolling}
+          meId={session?.playerId ?? null}
+          tv={showDashboard}
+        />
+      )}
+
       {!inGame ? (
         <JoinScreen
           connected={connected}
@@ -116,6 +126,7 @@ export default function App() {
           me={me}
           isHost={isHost}
           canBank={game.canBank}
+          react={game.react}
           feed={view.feed}
           rolling={view.rolling}
           bank={game.bank}

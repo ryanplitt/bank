@@ -20,6 +20,8 @@ import {
   FEED_KIND,
   MAX_PLAYERS,
   MAX_SPECTATORS,
+  REACTION_COOLDOWN_MS,
+  REACTION_IDS,
   S2C,
   ROLL_REVEAL_MS,
   SAFE_ROLL_INTERVAL_MS,
@@ -124,6 +126,8 @@ export class Room {
     this.rollIntervalMs = null;
     /** playerId -> socket id of the one live socket seated as that player. */
     this.socketByPlayer = new Map();
+    /** playerId -> when they last sent a reaction (for the cooldown). */
+    this.lastReactAt = new Map();
     /** playerId -> timer that drops a disconnected lobby player. */
     this.ghostTimers = new Map();
     this.lobbyGhostMs = opts.lobbyGhostMs ?? LOBBY_GHOST_MS;
@@ -566,6 +570,36 @@ export class Room {
     for (const e of result.events) this.narrate(e);
     this.touch();
     return { ok: true, result };
+  }
+
+  /**
+   * A seated player taunts the room, or one player in it. Reactions are pure
+   * fun: they are validated against a fixed menu, rate limited per player, and
+   * broadcast once without touching the game state or the feed.
+   */
+  react(playerId, reaction, targetId = null) {
+    const from = this.players.get(playerId);
+    if (!from) return { ok: false, reason: 'not a player' };
+    if (!REACTION_IDS.includes(reaction)) return { ok: false, reason: 'unknown reaction' };
+    let target = null;
+    if (targetId !== null && targetId !== undefined && targetId !== '') {
+      target = this.players.get(targetId);
+      if (!target || targetId === playerId) return { ok: false, reason: 'bad target' };
+    }
+    const now = Date.now();
+    if (now - (this.lastReactAt.get(playerId) ?? 0) < REACTION_COOLDOWN_MS) {
+      return { ok: false, code: ERROR_CODES.RATE_LIMITED, reason: 'slow down' };
+    }
+    this.lastReactAt.set(playerId, now);
+    this.emitToRoom(S2C.REACTION, {
+      reaction,
+      fromId: playerId,
+      from: from.name,
+      targetId: target ? target.id : null,
+      target: target ? target.name : null,
+    });
+    this.touch();
+    return { ok: true };
   }
 
   /** Move from a finished round to the next, or on to the game result. */

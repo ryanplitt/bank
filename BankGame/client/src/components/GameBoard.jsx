@@ -12,6 +12,9 @@ import DiceTray from './DiceTray.jsx';
 import BustReveal from './BustReveal.jsx';
 import Pot from './Pot.jsx';
 import PotHistory, { recentRolls } from './PotHistory.jsx';
+import BankToasts from './BankToasts.jsx';
+import RoundSplash from './RoundSplash.jsx';
+import ReactionTray from './ReactionTray.jsx';
 import { isBankingLocked } from '@bank/shared';
 
 /**
@@ -37,6 +40,7 @@ export default function GameBoard({
   host,
   isSpectator = false,
   rolling = false,
+  react,
 }) {
   const { round, rules, pot, lastRoll, nextRollAt, players, phase } = state;
   const roundOver = phase === 'roundOver';
@@ -97,6 +101,13 @@ export default function GameBoard({
       className={`board${isHost ? ' board--host' : ''}${isSpectator ? ' is-spectator' : ''}`}
       ref={boardRef}
     >
+      <BankToasts feed={feed} players={players} />
+      <RoundSplash
+        round={round}
+        total={rules.rounds}
+        phase={phase}
+        rollNumber={state.rollNumber}
+      />
       {isSpectator && (
         <div className="spectator-banner">
           <span className="spectator-title">You&apos;re watching 📡</span>
@@ -139,19 +150,24 @@ export default function GameBoard({
               without them. */}
           <BankButton
             disabled={isSpectator}
-            canBank={isSpectator ? false : canBank}
+            canBank={isSpectator ? false : canBank && !rolling}
             pot={pot}
             hint={
               isSpectator
                 ? 'read-only for spectators'
-                : bankingLocked
-                  ? `banking unlocks after roll ${rules.safeRolls}`
-                  : undefined
+                : rolling
+                  ? 'rolling…'
+                  : bankingLocked
+                    ? `banking unlocks after roll ${rules.safeRolls}`
+                    : undefined
             }
             onClick={bank}
           />
         </div>
       )}
+
+      {/* Always on for seated players: a bust is exactly when you want to heckle. */}
+      {!isSpectator && react && <ReactionTray players={players} me={me} react={react} />}
 
       {isHost && (
         <HostPanel state={state} host={host} me={me} />

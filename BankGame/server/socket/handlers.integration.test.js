@@ -809,4 +809,32 @@ describe('safe-roll banking lock and TV displays over the wire', () => {
     tv.socket.disconnect();
     await host.c.waitFor((s) => s.tvPresent === false, 'tv gone');
   });
+
+  it('delivers a taunt to every phone and the TV, and only players may send one', async () => {
+    const host = await createRoom();
+    const p2 = connect();
+    await p2.once('connect');
+    p2.emit(C2S.JOIN_GAME, { name: 'Brie', code: host.code });
+    const brie = await p2.once(S2C.SESSION);
+    await host.c.waitFor((s) => s.players.length === 2, 'two seated');
+    const tv = connect();
+    await tv.once('connect');
+    tv.emit(C2S.WATCH_GAME, { code: host.code, tv: true });
+    await host.c.waitFor((s) => s.tvPresent === true, 'tv attached');
+
+    const got = (c) => new Promise((resolve) => c.socket.once(S2C.REACTION, resolve));
+    const atP2 = got(p2);
+    const atTv = got(tv);
+    host.c.emit(C2S.REACT, { reaction: 'flip', targetId: brie.playerId });
+    const [a, b] = await Promise.all([atP2, atTv]);
+    expect(a).toMatchObject({ reaction: 'flip', targetId: brie.playerId, target: 'Brie' });
+    expect(b.reaction).toBe('flip');
+
+    // The TV is a spectator: it cannot heckle.
+    tv.emit(C2S.REACT, { reaction: 'flip' });
+    await tv.waitError('NOT_IN_GAME');
+    // And a made-up reaction goes nowhere.
+    p2.emit(C2S.REACT, { reaction: 'nope' });
+    await p2.waitError('BAD_PHASE');
+  });
 });

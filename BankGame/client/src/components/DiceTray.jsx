@@ -13,6 +13,13 @@ const FACE_INTERVAL = 75; // face-change cadence during the tumble
 
 const randomFace = () => 1 + Math.floor(Math.random() * 6);
 
+/** The stamp that slams down over the dice once they have landed. */
+const STAMPS = {
+  double: 'DOUBLES!',
+  safeSeven: 'LUCKY 7!',
+  bust: 'SEVEN!',
+};
+
 export default function DiceTray({ lastRoll, rolling = false }) {
   // Key that lets React remount/restart the tumble-in per authoritative roll.
   const rollKey = lastRoll ? `${lastRoll.rollNumber}-${lastRoll.dice.join('')}` : 'idle';
@@ -51,6 +58,11 @@ export default function DiceTray({ lastRoll, rolling = false }) {
           />
         ))}
       </div>
+      {!rolling && STAMPS[lastRoll.kind] && (
+        <div className={`roll-stamp roll-stamp--${lastRoll.kind}`} key={`s${rollKey}`} aria-hidden="true">
+          {STAMPS[lastRoll.kind]}
+        </div>
+      )}
     </div>
   );
 }

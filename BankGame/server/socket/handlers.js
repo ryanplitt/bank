@@ -157,6 +157,7 @@ export function registerHandlers(io, deps = {}) {
     socket.on(C2S.CREATE_TV, wrap(() => onCreateTv(socket)));
     socket.on(C2S.WATCH_GAME, wrap((p) => onWatch(socket, p)));
     socket.on(C2S.BANK, wrap(() => onBank(socket)));
+    socket.on(C2S.REACT, wrap((p) => onReact(socket, p)));
 
     for (const [event, handler] of [
       [C2S.START_GAME, onStart],
@@ -454,6 +455,25 @@ export function registerHandlers(io, deps = {}) {
   /* ------------------------------------------------------------------ *
    * Play
    * ------------------------------------------------------------------ */
+
+  function onReact(socket, payload) {
+    const ctx = socket.data.game;
+    if (!ctx) return sendError(socket, ERROR_CODES.NOT_IN_GAME, 'you are not in a game');
+    // Watchers and TVs can enjoy the show but not heckle it.
+    if (ctx.spectating) {
+      return sendError(socket, ERROR_CODES.NOT_IN_GAME, 'only players can react');
+    }
+    const room = manager.get(ctx.code);
+    if (!room || room !== ctx.room) {
+      return sendError(socket, ERROR_CODES.NO_SUCH_GAME, 'room no longer exists');
+    }
+    const res = room.react(
+      ctx.playerId,
+      String(payload?.reaction ?? ''),
+      payload?.targetId ? String(payload.targetId) : null,
+    );
+    if (!res.ok) sendError(socket, res.code ?? ERROR_CODES.BAD_PHASE, res.reason);
+  }
 
   function onBank(socket) {
     const ctx = socket.data.game;

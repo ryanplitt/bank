@@ -35,6 +35,9 @@ export function useGame() {
   const [state, setState] = useState(null);
   const [session, setSession] = useState(null);
   const [feed, setFeed] = useState([]);
+  // Taunts received recently, newest last. Ephemeral: never replayed on resume.
+  const [reactions, setReactions] = useState([]);
+  const reactionSeq = useRef(0);
   const [lastError, setLastError] = useState(null);
   const [connected, setConnected] = useState(socket.connected);
   // The room code we attached to as a read-only watcher (no session). A
@@ -93,11 +96,16 @@ export function useGame() {
       // The server replays the room's whole feed right after a session, so
       // start from empty or a resume would show every line twice.
       setFeed([]);
+      setReactions([]);
       if (payload.key === 'create' || payload.key === 'join') {
         saveIdentity(payload.code, payload.playerId, payload.token);
       }
     };
     const onFeed = (entry) => setFeed((prev) => [...prev.slice(-119), entry]);
+    const onReaction = (entry) => {
+      reactionSeq.current += 1;
+      setReactions((prev) => [...prev.slice(-29), { ...entry, id: reactionSeq.current }]);
+    };
     const onError = (err) => {
       creatingTvRef.current = false;
       if (resumeCodeRef.current && FATAL_RESUME_ERRORS.has(err.code)) {
@@ -134,6 +142,7 @@ export function useGame() {
     socket.on('state', onState);
     socket.on('session', onSession);
     socket.on('feed', onFeed);
+    socket.on('reaction', onReaction);
     socket.on('error:info', onError);
     socket.on('removed', onRemoved);
 
@@ -143,6 +152,7 @@ export function useGame() {
       socket.off('state', onState);
       socket.off('session', onSession);
       socket.off('feed', onFeed);
+      socket.off('reaction', onReaction);
       socket.off('error:info', onError);
       socket.off('removed', onRemoved);
     };
@@ -195,6 +205,11 @@ export function useGame() {
   // Actions are dropped while offline rather than buffered: socket.io would
   // otherwise replay a stale BANK or host command the moment it reconnects —
   // before the seat is even resumed.
+  /** Fire a taunt at the room, or at one player. Dropped while offline. */
+  const react = useCallback((reaction, targetId = null) => {
+    if (socket.connected) socket.emit(C2S.REACT, { reaction, targetId });
+  }, []);
+
   const bank = useCallback(() => {
     if (socket.connected) socket.emit(C2S.BANK);
   }, []);
@@ -228,6 +243,8 @@ export function useGame() {
     resume,
     watch,
     createTv,
+    reactions,
+    react,
     bank,
     host,
   };

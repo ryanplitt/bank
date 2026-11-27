@@ -17,6 +17,8 @@ export const C2S = {
   WATCH_GAME: 'game:watch',
 
   BANK: 'play:bank',
+  /** Fire a taunt/reaction at the room or one player: `{ reaction, targetId? }`. */
+  REACT: 'play:react',
 
   // Host-only commands.
   START_GAME: 'host:start',
@@ -40,6 +42,9 @@ export const S2C = {
   STATE: 'state',
   /** Append-only narration feed ("Ryan banked 340"). */
   FEED: 'feed',
+  /** A player's taunt, broadcast to the whole room and never stored:
+   *  `{ reaction, fromId, from, targetId, target }`. */
+  REACTION: 'reaction',
   /** A request failed. `{ code, message }` */
   ERROR: 'error:info',
   /** This client was removed from the room (kicked, or the room closed).

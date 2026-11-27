@@ -1,4 +1,5 @@
 import Scoreboard from './Scoreboard.jsx';
+import Confetti from './Confetti.jsx';
 import { C2S } from '@bank/shared';
 
 /** Final standings after the last round, plus a host "play again" action. */
@@ -6,9 +7,11 @@ export default function GameOver({ state, me, isHost, host }) {
   const winners = new Set(state.winnerIds || []);
   return (
     <div className="gameover">
+      {state.winnerIds && state.winnerIds.length > 0 && <Confetti />}
       <h2>Game over 🏁</h2>
       {state.winnerIds && state.winnerIds.length > 0 ? (
         <p className="winner-line">
+          <span className="trophy">🏆</span>{' '}
           {(state.players || [])
             .filter((p) => winners.has(p.id))
             .map((p) => p.name)

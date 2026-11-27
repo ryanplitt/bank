@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MAX_SPECTATORS, ROLL_REVEAL_MS, SAFE_ROLL_INTERVAL_MS } from '@bank/shared';
+import {
+  MAX_SPECTATORS,
+  REACTION_COOLDOWN_MS,
+  ROLL_REVEAL_MS,
+  SAFE_ROLL_INTERVAL_MS,
+} from '@bank/shared';
 import { Room } from './Room.js';
 import { RoomManager } from './RoomManager.js';
 
@@ -316,6 +321,58 @@ describe('spectators', () => {
     room.addSpectator();
     room.markDisconnected('host');
     expect(room.emptySince).not.toBeNull(); // spectators are not presence
+  });
+});
+
+describe('reactions', () => {
+  function reactRoom() {
+    const sent = [];
+    const room = new Room('RX1234', 'host', { rng: () => 0, emit: (e, p) => e === 'reaction' && sent.push(p) });
+    room.enrollName('host', 'Ryan');
+    room.join('p2', 'Brie');
+    return { room, sent };
+  }
+
+  it('broadcasts a valid reaction once, without touching state or the feed', () => {
+    const { room, sent } = reactRoom();
+    const version = room.version;
+    const feedLen = room.feed.length;
+    expect(room.react('host', 'flip').ok).toBe(true);
+    expect(sent).toEqual([
+      { reaction: 'flip', fromId: 'host', from: 'Ryan', targetId: null, target: null },
+    ]);
+    expect(room.version).toBe(version);
+    expect(room.feed.length).toBe(feedLen);
+  });
+
+  it('can aim at another player, but not yourself or a stranger', () => {
+    const { room, sent } = reactRoom();
+    expect(room.react('host', 'skull', 'p2').ok).toBe(true);
+    expect(sent[0]).toMatchObject({ targetId: 'p2', target: 'Brie' });
+    expect(room.react('host', 'skull', 'host').reason).toBe('bad target');
+    expect(room.react('host', 'skull', 'nobody').reason).toBe('bad target');
+  });
+
+  it('rejects unknown reactions and non-players', () => {
+    const { room } = reactRoom();
+    expect(room.react('host', '<script>').reason).toBe('unknown reaction');
+    expect(room.react('ghost', 'flip').reason).toBe('not a player');
+  });
+
+  it('rate limits one player without limiting another', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = reactRoom();
+      expect(room.react('host', 'laugh').ok).toBe(true);
+      const again = room.react('host', 'laugh');
+      expect(again.ok).toBe(false);
+      expect(again.code).toBe('RATE_LIMITED');
+      expect(room.react('p2', 'laugh').ok).toBe(true);
+      vi.advanceTimersByTime(REACTION_COOLDOWN_MS);
+      expect(room.react('host', 'laugh').ok).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

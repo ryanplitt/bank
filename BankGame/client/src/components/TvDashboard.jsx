@@ -6,6 +6,9 @@ import PotHistory, { recentRolls } from './PotHistory.jsx';
 import Scoreboard from './Scoreboard.jsx';
 import Countdown from './Countdown.jsx';
 import QrInvite from './QrInvite.jsx';
+import Confetti from './Confetti.jsx';
+import BankToasts from './BankToasts.jsx';
+import RoundSplash from './RoundSplash.jsx';
 import { joinUrl } from '../links.js';
 
 /** Keep the TV from dimming or sleeping while the dashboard is up. */
@@ -53,7 +56,9 @@ export default function TvDashboard({ state, feed, rolling = false }) {
   useKeepAwake();
 
   return (
-    <div className="tv-dashboard">
+    <div className={`tv-dashboard${busted ? ' tv-dashboard--bust' : ''}`}>
+      <BankToasts feed={feed} players={players} />
+      <RoundSplash round={round} total={rules.rounds} phase={phase} rollNumber={state.rollNumber} />
       <header className="tv-top">
         <div className="tv-title">
           BANK
@@ -121,8 +126,15 @@ function PhaseBanner({ state }) {
   if (state.phase === 'gameOver') {
     const winners = (state.players || []).filter((p) => state.winnerIds?.includes(p.id));
     const label =
-      winners.length > 0 ? `${winners.map((p) => p.name).join(' and ')} win!` : 'Nobody banked — no winner.';
-    return <div className="tv-banner tv-banner--win">🏁 {label}</div>;
+      winners.length > 0
+        ? `${winners.map((p) => p.name).join(' and ')} ${winners.length === 1 ? 'wins' : 'win'}!`
+        : 'Nobody banked — no winner.';
+    return (
+      <div className="tv-banner tv-banner--win">
+        <Confetti />
+        <span className="trophy">🏆</span> {label}
+      </div>
+    );
   }
   if (state.phase === 'roundOver') {
     const result = state.lastRoundResult || {};

@@ -27,14 +27,19 @@ export default function Countdown({ nextRollAt, totalMs }) {
   const secsLeft = msLeft / 1000;
   const span = totalMs || 8000;
   const frac = Math.min(1, Math.max(0, msLeft / span));
+  // The short gaps between safe rolls tick by in a second: flagging every one
+  // as urgent would just flicker, so urgency is for the real banking windows.
+  const urgent = span >= 3000 && secsLeft <= 2;
 
   return (
-    <div className="countdown">
+    <div className={`countdown${urgent ? ' countdown--urgent' : ''}`}>
       <div className="countdown-track">
         <div className="countdown-fill" style={{ width: `${frac * 100}%` }} />
       </div>
-      <div className={`countdown-label ${secsLeft <= 3 ? 'urgent' : ''}`}>
-        {secsLeft <= 0.9 ? 'Rolling…' : `Next roll in ${Math.ceil(secsLeft)}s`}
+      {/* "Rolling…" only once the deadline has actually passed: saying it any
+          earlier announces a roll the dice haven't made yet. */}
+      <div className={`countdown-label ${urgent ? 'urgent' : ''}`}>
+        {msLeft <= 0 ? 'Rolling…' : `Next roll in ${Math.ceil(secsLeft)}s`}
       </div>
     </div>
   );
